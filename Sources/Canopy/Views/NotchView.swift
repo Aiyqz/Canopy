@@ -88,9 +88,9 @@ struct NotchView: View {
                 } else if let u = item as? URL {
                     url = u
                 }
-                if let url {
-                    DispatchQueue.main.async { vm.addFiles([url]) }
-                }
+                // Only accept real on-disk file URLs.
+                guard let url, url.isFileURL else { return }
+                DispatchQueue.main.async { vm.addFiles([url]) }
             }
         }
     }

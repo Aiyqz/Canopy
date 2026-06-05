@@ -238,9 +238,16 @@ final class NowPlayingModel: ObservableObject {
 
     // MARK: File shelf
 
+    /// Appends dropped files to the shelf. Skips duplicates and anything that
+    /// isn't a real on-disk file. Mutating the published `shelfFiles` flips
+    /// `shelfPinned`, which expands the notch to reveal the shelf.
     func addFiles(_ urls: [URL]) {
-        for url in urls where !shelfFiles.contains(url) {
-            shelfFiles.append(url)
+        let fm = FileManager.default
+        for url in urls {
+            let standardized = url.standardizedFileURL
+            guard fm.fileExists(atPath: standardized.path),
+                  !shelfFiles.contains(standardized) else { continue }
+            shelfFiles.append(standardized)
         }
     }
 
