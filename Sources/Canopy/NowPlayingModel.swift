@@ -89,6 +89,12 @@ final class NowPlayingModel: ObservableObject {
     }
 
     private func apply(_ snap: NowPlayingSnapshot) {
+        // Identify the track up front: backends often push the new title/artist
+        // in one update and the (larger) artwork in a following one.
+        let key = "\(snap.title)|\(snap.artist)|\(snap.album)"
+        let trackChanged = key != trackKey && !snap.title.isEmpty
+        let wasFirst = trackKey.isEmpty
+
         title = snap.title
         artist = snap.artist
         album = snap.album
@@ -104,8 +110,18 @@ final class NowPlayingModel: ObservableObject {
             elapsed = snap.elapsed
         }
 
+        // On a real track change, drop the previous track's artwork immediately so
+        // a new song never displays the old album. If this same update also carries
+        // the new art, the block below sets it in the same render pass (no flash);
+        // otherwise we show the placeholder until the new art arrives.
+        if trackChanged {
+            artwork = nil
+            artworkHash = 0
+            palette = ColorExtractor.fallback
+        }
+
         // Only react to artwork when this update actually carried it; a partial
-        // diff that omits art must not wipe the current image.
+        // diff that omits art must not wipe the current image (within a track).
         if snap.carriedArtwork {
             if let data = snap.artworkData {
                 let h = data.hashValue
@@ -127,23 +143,34 @@ final class NowPlayingModel: ObservableObject {
 
         if !title.isEmpty { hasContent = true }
 
-        // New track? refresh lyrics + show a now-playing banner.
-        let key = "\(title)|\(artist)|\(album)"
-        if key != trackKey, !title.isEmpty {
-            let wasFirst = trackKey.isEmpty
+        // Capture system audio for the EQ bars only while actually playing.
+        AudioLevelMonitor.shared.setEnabled(isPlaying && !title.isEmpty)
+
+        // New track? refresh lyrics + schedule a now-playing banner.
+        if trackChanged {
             trackKey = key
             loadLyrics(title: title, artist: artist, album: album, duration: duration, key: key)
             if isPlaying && !wasFirst {
-                pushBanner(NotchBanner(
-                    title: title,
-                    subtitle: artist,
-                    body: nil,
-                    icon: artwork,
-                    kind: .nowPlaying
-                ))
+                scheduleNowPlayingBanner(forKey: key)
             }
         }
         updateLyricIndex()
+    }
+
+    /// Fire the now-playing banner shortly after a track change so the new
+    /// artwork (which usually lands a beat after the metadata) is included rather
+    /// than the previous track's.
+    private func scheduleNowPlayingBanner(forKey key: String) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            guard let self, self.trackKey == key, self.isPlaying, !self.title.isEmpty else { return }
+            self.pushBanner(NotchBanner(
+                title: self.title,
+                subtitle: self.artist,
+                body: nil,
+                icon: self.artwork,
+                kind: .nowPlaying
+            ))
+        }
     }
 
     // MARK: Banners

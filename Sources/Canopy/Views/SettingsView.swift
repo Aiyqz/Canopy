@@ -12,6 +12,7 @@ struct SettingsView: View {
     var onTestBanner: () -> Void
     var onQuit: () -> Void
 
+    @ObservedObject private var audio = AudioLevelMonitor.shared
     @State private var launchAtLogin = LaunchAtLogin.isEnabled
     @State private var mirrorText = ""
 
@@ -61,6 +62,22 @@ struct SettingsView: View {
                     Text("Reads & controls whatever is playing system-wide.")
                         .font(.caption)
                         .foregroundStyle(.tertiary)
+
+                    Divider()
+
+                    labeledRow("EQ bars") {
+                        Text(audio.levels.isEmpty ? "Animated" : "Live audio spectrum")
+                            .foregroundStyle(.secondary)
+                    }
+                    if audio.levels.isEmpty {
+                        HStack {
+                            Text("Grant Screen Recording for bars that react to the audio.")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                            Spacer()
+                            Button("Open…") { openScreenRecording() }
+                        }
+                    }
                 }
 
                 section("Notifications") {
@@ -95,6 +112,12 @@ struct SettingsView: View {
         .onAppear {
             launchAtLogin = LaunchAtLogin.isEnabled
             mirrorText = mirrorStatus()
+        }
+    }
+
+    private func openScreenRecording() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
+            NSWorkspace.shared.open(url)
         }
     }
 
