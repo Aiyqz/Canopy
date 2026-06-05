@@ -14,3 +14,12 @@ DerivedData/
 # Xcode
 *.xcodeproj/xcuserdata/
 *.xcworkspace/xcuserdata/
+
+# XcodeGen output — regenerate with `xcodegen generate`.
+Canopy.xcodeproj/
+
+# Built adapter artifacts — produced by Scripts/fetch-adapter.sh, not committed.
+# (The reviewable Perl script Resources/mediaremote-adapter.pl IS tracked.)
+Resources/MediaRemoteAdapter.framework/
+Resources/MediaRemoteAdapterTestClient
+Resources/.adapter-build/

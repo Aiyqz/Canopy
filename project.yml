@@ -1,0 +1,69 @@
+# XcodeGen spec — regenerate the .xcodeproj from CLI with `xcodegen generate`.
+#
+# Canopy is a background ("accessory") agent: no Dock icon, a floating notch
+# panel, and a menu-bar item. It is NOT destined for the Mac App Store, so the
+# App Sandbox is OFF and the Hardened Runtime is ON (see Canopy.entitlements).
+#
+# The MediaRemote adapter (mediaremote-adapter.pl + MediaRemoteAdapter.framework
+# + MediaRemoteAdapterTestClient) is BUNDLED AS RESOURCES — copied verbatim into
+# Contents/Resources and never linked or embedded. The app only ever passes the
+# framework's path to /usr/bin/perl. Run `Scripts/fetch-adapter.sh` once to
+# populate Resources/ with the built framework before building.
+name: Canopy
+options:
+  bundleIdPrefix: pro.getcanopy
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+
+settings:
+  base:
+    MACOSX_DEPLOYMENT_TARGET: "14.0"
+    SWIFT_VERSION: "5.0"
+    # Ad-hoc signing by default so a fresh checkout builds without a team.
+    CODE_SIGN_IDENTITY: "-"
+    CODE_SIGN_STYLE: Manual
+    DEVELOPMENT_TEAM: ""
+
+targets:
+  Canopy:
+    type: application
+    platform: macOS
+    # Entry point is plain top-level code in main.swift (no @main), so there is
+    # no generated Info.plist — we ship our own.
+    info:
+      path: Info.plist
+    entitlements:
+      path: Canopy.entitlements
+    sources:
+      - path: Sources/Canopy
+      # --- Adapter bundled as resources (copied, NOT linked / embedded) ---
+      - path: Resources/mediaremote-adapter.pl
+        buildPhase: resources
+        optional: true
+      # Folder reference: the whole .framework directory is copied verbatim.
+      - path: Resources/MediaRemoteAdapter.framework
+        buildPhase: resources
+        type: folder
+        optional: true
+      - path: Resources/MediaRemoteAdapterTestClient
+        buildPhase: resources
+        optional: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: pro.getcanopy.clone
+        PRODUCT_NAME: Canopy
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: Info.plist
+        # Background agent: no Dock icon. Also enforced via LSUIElement in
+        # Info.plist and .accessory activation policy in main.swift.
+        LSUIElement: YES
+        # Mac App Store off; harden the runtime, drop the sandbox.
+        ENABLE_HARDENED_RUNTIME: YES
+        ENABLE_APP_SANDBOX: NO
+        CODE_SIGN_ENTITLEMENTS: Canopy.entitlements
+        # The app icon is generated programmatically (see AppIcon.swift / build.sh);
+        # no asset catalog is required.
+        ASSETCATALOG_COMPILER_APPICON_NAME: ""
+        COMBINE_HIDPI_IMAGES: YES

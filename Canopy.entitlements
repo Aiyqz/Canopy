@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- App Sandbox is OFF: Canopy needs system-wide now-playing, Full Disk
+         Access for notification mirroring, and to spawn /usr/bin/perl. -->
+    <key>com.apple.security.app-sandbox</key>
+    <false/>
+    <!-- Hardened Runtime is ON. The AppleScript fallback (controlling Music /
+         Spotify when the MediaRemote adapter is unavailable) sends Apple events
+         to other apps, which requires this entitlement plus the
+         NSAppleEventsUsageDescription string in Info.plist. -->
+    <key>com.apple.security.automation.apple-events</key>
+    <true/>
+</dict>
+</plist>
