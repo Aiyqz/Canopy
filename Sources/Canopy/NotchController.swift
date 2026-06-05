@@ -20,7 +20,7 @@ enum NotchPresentation {
 final class NotchController {
     private let model: NowPlayingModel
     private let window: NSPanel
-    private let hosting: NSHostingView<NotchView>
+    private let hosting: NotchHostingView
 
     private var screen: NSScreen
     private var metrics: NotchMetrics
@@ -54,7 +54,7 @@ final class NotchController {
         window.hidesOnDeactivate = false
 
         let root = NotchView(vm: model, metrics: metrics) { _ in }
-        hosting = NSHostingView(rootView: root)
+        hosting = NotchHostingView(rootView: root)
         window.contentView = hosting
 
         // Wire the presentation callback now that `self` is available.
@@ -181,6 +181,22 @@ final class NotchController {
         }
         // No notch (external display / older Mac): a floating island.
         return NotchMetrics(notchWidth: 190, notchHeight: 32)
+    }
+}
+
+/// Hosting view that only accepts clicks and hovers landing on the visible notch
+/// shape. Events in the transparent rounded-corner gaps return nil from
+/// `hitTest`, so AppKit passes them through to whatever app is underneath
+/// instead of the island swallowing the whole top strip.
+private final class NotchHostingView: NSHostingView<NotchView> {
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        // `point` is in the superview's coordinates; bring it into our own.
+        // NSHostingView is flipped (top-left origin), matching NotchShape's
+        // coordinate space, so the path lines up with what's rendered.
+        let local = convert(point, from: superview)
+        let shape = NotchShape().path(in: bounds).cgPath
+        guard shape.contains(local) else { return nil }
+        return super.hitTest(point)
     }
 }
 
