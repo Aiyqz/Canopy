@@ -397,8 +397,11 @@ enum NotchSnapshotter {
         model.artist = "M83"
         model.album = "Hurry Up, We're Dreaming"
         model.duration = 244
-        model.elapsed = 78
         model.isPlaying = true
+        // Seed the elapsed/timestamp anchor so liveElapsed() (and the scrubber)
+        // report ~78s. (No backend is running in snapshot mode, so seek is a no-op
+        // beyond setting the anchor.)
+        model.seek(toTime: 78)
         model.hasContent = true
         model.palette = [
             Color(red: 0.95, green: 0.55, blue: 0.25),
