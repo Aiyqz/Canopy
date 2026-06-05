@@ -247,50 +247,53 @@ struct ScrubBar: View {
     @State private var dragFraction: Double = 0
 
     var body: some View {
-        VStack(spacing: 4) {
-            GeometryReader { geo in
-                let frac = dragging ? dragFraction : currentFraction
-                ZStack(alignment: .leading) {
-                    Capsule().fill(.white.opacity(0.16))
-                        .frame(height: dragging ? 6 : 4)
-                    Capsule()
-                        .fill(LinearGradient(colors: fillColors, startPoint: .leading, endPoint: .trailing))
-                        .frame(width: geo.size.width * frac, height: dragging ? 6 : 4)
-                }
-                .frame(height: 16, alignment: .center)
-                .contentShape(Rectangle())
-                .gesture(
-                    DragGesture(minimumDistance: 0)
-                        .onChanged { v in
-                            dragging = true
-                            dragFraction = clamp(v.location.x / geo.size.width)
-                        }
-                        .onEnded { v in
-                            vm.seek(toFraction: clamp(v.location.x / geo.size.width))
-                            dragging = false
-                        }
-                )
-            }
-            .frame(height: 16)
+        // Drive the fill from the live (elapsed + timestamp)-projected position so
+        // it advances smoothly between backend updates. Pause the ticking while
+        // stopped or scrubbing to avoid needless redraws.
+        TimelineView(.animation(minimumInterval: 0.2, paused: !vm.isPlaying || dragging)) { context in
+            let live = vm.liveElapsed(at: context.date)
+            let currentFraction = vm.duration > 0 ? clamp(live / vm.duration) : 0
+            let frac = dragging ? dragFraction : currentFraction
+            let displayElapsed = dragging ? dragFraction * vm.duration : live
 
-            HStack {
-                Text(timeString(displayElapsed))
-                Spacer()
-                Text(timeString(vm.duration))
+            VStack(spacing: 4) {
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(.white.opacity(0.16))
+                            .frame(height: dragging ? 6 : 4)
+                        Capsule()
+                            .fill(LinearGradient(colors: fillColors, startPoint: .leading, endPoint: .trailing))
+                            .frame(width: geo.size.width * frac, height: dragging ? 6 : 4)
+                    }
+                    .frame(height: 16, alignment: .center)
+                    .contentShape(Rectangle())
+                    .gesture(
+                        DragGesture(minimumDistance: 0)
+                            .onChanged { v in
+                                dragging = true
+                                dragFraction = clamp(v.location.x / geo.size.width)
+                            }
+                            .onEnded { v in
+                                vm.seek(toFraction: clamp(v.location.x / geo.size.width))
+                                dragging = false
+                            }
+                    )
+                }
+                .frame(height: 16)
+
+                HStack {
+                    Text(timeString(displayElapsed))
+                    Spacer()
+                    Text(timeString(vm.duration))
+                }
+                .font(.system(size: 9, weight: .medium).monospacedDigit())
+                .foregroundStyle(.white.opacity(0.45))
             }
-            .font(.system(size: 9, weight: .medium).monospacedDigit())
-            .foregroundStyle(.white.opacity(0.45))
         }
     }
 
     private var fillColors: [Color] {
         vm.palette.count >= 2 ? Array(vm.palette.prefix(2)) : [.white.opacity(0.9), .white.opacity(0.7)]
-    }
-    private var currentFraction: Double {
-        vm.duration > 0 ? clamp(vm.elapsed / vm.duration) : 0
-    }
-    private var displayElapsed: Double {
-        dragging ? dragFraction * vm.duration : vm.elapsed
     }
     private func clamp(_ x: Double) -> Double { min(max(x, 0), 1) }
 }

@@ -72,12 +72,20 @@ final class NowPlayingModel: ObservableObject {
     }
 
     private func tick() {
-        // Reconstruct elapsed from the last sampled (elapsed, timestamp) pair.
-        if isPlaying, duration > 0 {
-            let live = elapsedBase + Date().timeIntervalSince(elapsedTimestamp)
-            elapsed = min(max(live, 0), duration)
-        }
+        elapsed = liveElapsed()
         updateLyricIndex()
+    }
+
+    /// Elapsed playback time projected to `date` from the last sampled
+    /// (elapsedTime, timestamp) anchor — the backend reports elapsed *as of* its
+    /// timestamp, so while playing we extrapolate forward from there. This is
+    /// what drives the scrubber smoothly without continuous polling.
+    func liveElapsed(at date: Date = Date()) -> Double {
+        guard duration > 0 else { return max(elapsedBase, 0) }
+        let projected = isPlaying
+            ? elapsedBase + date.timeIntervalSince(elapsedTimestamp)
+            : elapsedBase
+        return min(max(projected, 0), duration)
     }
 
     private func apply(_ snap: NowPlayingSnapshot) {
