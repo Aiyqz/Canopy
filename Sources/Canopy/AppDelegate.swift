@@ -7,6 +7,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let mirror = NotificationMirror()
     private var notchController: NotchController?
     private var widgetController: WidgetController?
+    private var settingsWindow: SettingsWindowController?
     private var statusItem: NSStatusItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -17,6 +18,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         mirror.onBanner = { [weak self] banner in self?.model.pushBanner(banner) }
         mirror.onStatusChange = { [weak self] in self?.rebuildMenu() }
         mirror.start()
+
+        settingsWindow = SettingsWindowController(
+            settings: settings,
+            model: model,
+            mirrorStatus: { [weak self] in self?.mirror.status.menuText ?? "" },
+            onGrantFDA: { [weak self] in self?.openFullDiskAccess() },
+            onTestBanner: { [weak self] in self?.testBanner() }
+        )
 
         setUpStatusItem()
     }
@@ -45,6 +54,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let header = NSMenuItem(title: status, action: nil, keyEquivalent: "")
         header.isEnabled = false
         menu.addItem(header)
+        menu.addItem(.separator())
+
+        let settingsItem = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
+        settingsItem.target = self
+        menu.addItem(settingsItem)
         menu.addItem(.separator())
 
         let widgetToggle = NSMenuItem(
@@ -152,6 +166,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         settings.preset = preset
         if !settings.widgetVisible { settings.widgetVisible = true }
         rebuildMenu()
+    }
+
+    @objc private func openSettings() {
+        settingsWindow?.show()
     }
 
     @objc private func selectNotchSize(_ sender: NSMenuItem) {

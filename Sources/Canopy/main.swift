@@ -12,6 +12,14 @@ MainActor.assumeIsolated {
         exit(0)
     }
 
+    // Settings UI render mode: `Canopy --settings-snapshot <path.png>`.
+    if let idx = CommandLine.arguments.firstIndex(of: "--settings-snapshot") {
+        app.setActivationPolicy(.prohibited)
+        let path = CommandLine.arguments.count > idx + 1 ? CommandLine.arguments[idx + 1] : "/tmp/canopy_settings.png"
+        SettingsSnapshot.render(to: path)
+        exit(0)
+    }
+
     // Icon render mode: `Canopy --icon <path.png>`.
     if let idx = CommandLine.arguments.firstIndex(of: "--icon") {
         app.setActivationPolicy(.prohibited)
