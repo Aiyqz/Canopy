@@ -354,15 +354,16 @@ final class MediaController {
     // MARK: AppleScript backend
 
     private func startAppleScriptPolling() {
-        let poll: @MainActor () -> Void = { [weak self] in
-            guard let self else { return }
-            self.appleScript.snapshot { snap in
-                Task { @MainActor in if let snap { self.onSnapshot?(snap) } }
-            }
+        pollAppleScript()
+        appleScriptTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.pollAppleScript() }
         }
-        poll()
-        appleScriptTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
-            Task { @MainActor in poll() }
+    }
+
+    private func pollAppleScript() {
+        appleScript.snapshot { [weak self] snap in
+            guard let snap else { return }
+            Task { @MainActor in self?.onSnapshot?(snap) }
         }
     }
 }

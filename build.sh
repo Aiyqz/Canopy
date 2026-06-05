@@ -33,7 +33,15 @@ cp "$BIN" "$APP/Contents/MacOS/Canopy"
 cp Info.plist "$APP/Contents/Info.plist"
 [ -f "/tmp/Canopy.icns" ] && cp "/tmp/Canopy.icns" "$APP/Contents/Resources/AppIcon.icns"
 
-echo "▸ Ad-hoc signing…"
-codesign --force --deep --sign - "$APP" >/dev/null 2>&1 || true
+# Bundle the MediaRemote adapter (built by Scripts/fetch-adapter.sh) so the
+# swift-build app behaves like the xcodebuild one. Copied, never linked.
+[ -f Resources/mediaremote-adapter.pl ] && cp Resources/mediaremote-adapter.pl "$APP/Contents/Resources/"
+[ -d Resources/MediaRemoteAdapter.framework ] && cp -R Resources/MediaRemoteAdapter.framework "$APP/Contents/Resources/"
+[ -f Resources/MediaRemoteAdapterTestClient ] && cp Resources/MediaRemoteAdapterTestClient "$APP/Contents/Resources/"
+
+echo "▸ Ad-hoc signing (hardened runtime + entitlements)…"
+codesign --force --deep --options runtime \
+  --entitlements Canopy.entitlements --sign - "$APP" >/dev/null 2>&1 \
+  || codesign --force --deep --sign - "$APP" >/dev/null 2>&1 || true
 
 echo "✓ Built $APP"

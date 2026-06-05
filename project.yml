@@ -30,12 +30,9 @@ targets:
   Canopy:
     type: application
     platform: macOS
-    # Entry point is plain top-level code in main.swift (no @main), so there is
-    # no generated Info.plist — we ship our own.
-    info:
-      path: Info.plist
-    entitlements:
-      path: Canopy.entitlements
+    # We ship a hand-written Info.plist and Canopy.entitlements rather than have
+    # XcodeGen generate them (it would overwrite our files), so they're wired in
+    # via INFOPLIST_FILE / CODE_SIGN_ENTITLEMENTS below instead of info:/entitlements: blocks.
     sources:
       - path: Sources/Canopy
       # --- Adapter bundled as resources (copied, NOT linked / embedded) ---
@@ -56,9 +53,8 @@ targets:
         PRODUCT_NAME: Canopy
         GENERATE_INFOPLIST_FILE: NO
         INFOPLIST_FILE: Info.plist
-        # Background agent: no Dock icon. Also enforced via LSUIElement in
-        # Info.plist and .accessory activation policy in main.swift.
-        LSUIElement: YES
+        # No Dock icon: LSUIElement lives in Info.plist; .accessory policy is set
+        # in main.swift. (LSUIElement is a plist key, not a build setting.)
         # Mac App Store off; harden the runtime, drop the sandbox.
         ENABLE_HARDENED_RUNTIME: YES
         ENABLE_APP_SANDBOX: NO
