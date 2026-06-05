@@ -39,8 +39,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard let menu = statusItem?.menu else { return }
         menu.removeAllItems()
 
-        let status = MediaRemote.shared.isAvailable
-            ? "Canopy — media bridge active"
+        let status = model.mediaAvailable
+            ? "Canopy — media: \(model.backendName)"
             : "Canopy — media bridge unavailable"
         let header = NSMenuItem(title: status, action: nil, keyEquivalent: "")
         header.isEnabled = false

@@ -18,6 +18,9 @@ final class NowPlayingModel: ObservableObject {
     /// True once we've seen any track at all.
     @Published var hasContent: Bool = false
 
+    /// Human-readable name of the active media backend (for the menu).
+    @Published var backendName: String = "starting…"
+
     // Apple-Music-style gradient palette derived from album art.
     @Published var palette: [Color] = ColorExtractor.fallback
 
@@ -32,8 +35,12 @@ final class NowPlayingModel: ObservableObject {
     // Notch banners (now-playing changes + mirrored notifications).
     @Published var currentBanner: NotchBanner?
 
+    private let controller = MediaController()
     private var ticker: Timer?
-    private var lastTick = Date()
+    // Elapsed playback is reconstructed from the backend's elapsed + timestamp
+    // pair so the scrubber stays accurate without continuous polling.
+    private var elapsedBase: Double = 0
+    private var elapsedTimestamp: Date = Date()
     private var artworkHash: Int = 0
     private var trackKey: String = ""
     private var bannerQueue: [NotchBanner] = []
@@ -42,6 +49,7 @@ final class NowPlayingModel: ObservableObject {
     var hasMedia: Bool { !title.isEmpty }
     var shelfPinned: Bool { !shelfFiles.isEmpty || isDropTargeted }
     var bannerActive: Bool { currentBanner != nil }
+    var mediaAvailable: Bool { controller.isAvailable }
 
     var currentLyric: String? {
         guard let i = currentLyricIndex, lyrics.indices.contains(i) else { return nil }
@@ -50,18 +58,13 @@ final class NowPlayingModel: ObservableObject {
     }
 
     func start() {
-        MediaRemote.shared.registerForNotifications()
-
-        let nc = NotificationCenter.default
-        nc.addObserver(forName: MediaRemote.infoDidChange, object: nil, queue: .main) { [weak self] _ in
-            Task { @MainActor in self?.refresh() }
+        controller.onBackendResolved = { [weak self] backend in
+            self?.backendName = backend.rawValue
         }
-        nc.addObserver(forName: MediaRemote.isPlayingDidChange, object: nil, queue: .main) { [weak self] _ in
-            Task { @MainActor in self?.refreshPlaying() }
+        controller.onSnapshot = { [weak self] snapshot in
+            self?.apply(snapshot)
         }
-
-        refresh()
-        refreshPlaying()
+        controller.start()
 
         ticker = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.tick() }
@@ -69,53 +72,49 @@ final class NowPlayingModel: ObservableObject {
     }
 
     private func tick() {
-        let now = Date()
-        let dt = now.timeIntervalSince(lastTick)
-        lastTick = now
+        // Reconstruct elapsed from the last sampled (elapsed, timestamp) pair.
         if isPlaying, duration > 0 {
-            elapsed = min(elapsed + dt, duration)
+            let live = elapsedBase + Date().timeIntervalSince(elapsedTimestamp)
+            elapsed = min(max(live, 0), duration)
         }
         updateLyricIndex()
     }
 
-    func refresh() {
-        MediaRemote.shared.getNowPlayingInfo { [weak self] info in
-            Task { @MainActor in self?.apply(info) }
-        }
-    }
+    private func apply(_ snap: NowPlayingSnapshot) {
+        title = snap.title
+        artist = snap.artist
+        album = snap.album
+        duration = snap.duration
+        isPlaying = snap.isPlaying
 
-    private func refreshPlaying() {
-        MediaRemote.shared.getIsPlaying { [weak self] playing in
-            Task { @MainActor in self?.isPlaying = playing }
-        }
-    }
-
-    private func apply(_ info: [String: Any]) {
-        title = info[MediaRemote.kTitle] as? String ?? ""
-        artist = info[MediaRemote.kArtist] as? String ?? ""
-        album = info[MediaRemote.kAlbum] as? String ?? ""
-        duration = info[MediaRemote.kDuration] as? Double ?? 0
-        elapsed = info[MediaRemote.kElapsed] as? Double ?? 0
-        lastTick = Date()
-
-        if let rate = info[MediaRemote.kPlaybackRate] as? Double {
-            isPlaying = rate > 0
+        // Anchor the scrubber to this measurement and project it to "now".
+        elapsedBase = snap.elapsed
+        elapsedTimestamp = snap.timestamp
+        if isPlaying, duration > 0 {
+            elapsed = min(max(snap.elapsed + Date().timeIntervalSince(snap.timestamp), 0), duration)
+        } else {
+            elapsed = snap.elapsed
         }
 
-        if let data = info[MediaRemote.kArtworkData] as? Data {
-            let h = data.hashValue
-            if h != artworkHash {
-                artworkHash = h
-                let image = NSImage(data: data)
-                artwork = image
-                withAnimation(.easeInOut(duration: 0.6)) {
-                    palette = ColorExtractor.palette(from: image)
+        // Only react to artwork when this update actually carried it; a partial
+        // diff that omits art must not wipe the current image.
+        if snap.carriedArtwork {
+            if let data = snap.artworkData {
+                let h = data.hashValue
+                if h != artworkHash {
+                    artworkHash = h
+                    let image = NSImage(data: data)
+                    artwork = image
+                    withAnimation(.easeInOut(duration: 0.6)) {
+                        palette = ColorExtractor.palette(from: image)
+                    }
                 }
+            } else if title.isEmpty {
+                // Nothing playing → reset to the default gradient.
+                artwork = nil
+                artworkHash = 0
+                palette = ColorExtractor.fallback
             }
-        } else if title.isEmpty {
-            artwork = nil
-            artworkHash = 0
-            palette = ColorExtractor.fallback
         }
 
         if !title.isEmpty { hasContent = true }
@@ -207,19 +206,20 @@ final class NowPlayingModel: ObservableObject {
     // MARK: Commands
 
     func togglePlayPause() {
-        MediaRemote.shared.send(.togglePlayPause)
-        isPlaying.toggle() // optimistic; corrected by notification
-        scheduleRefresh()
+        controller.send(.togglePlayPause)
+        // Optimistic; a fresh snapshot will confirm. Re-anchor elapsed so the
+        // scrubber keeps moving (or freezes) correctly until then.
+        isPlaying.toggle()
+        elapsedBase = elapsed
+        elapsedTimestamp = Date()
     }
 
     func next() {
-        MediaRemote.shared.send(.nextTrack)
-        scheduleRefresh()
+        controller.send(.nextTrack)
     }
 
     func previous() {
-        MediaRemote.shared.send(.previousTrack)
-        scheduleRefresh()
+        controller.send(.previousTrack)
     }
 
     func seek(toFraction fraction: Double) {
@@ -230,17 +230,10 @@ final class NowPlayingModel: ObservableObject {
         guard duration > 0 else { return }
         let t = max(0, min(time, duration))
         elapsed = t
-        lastTick = Date()
-        MediaRemote.shared.setElapsed(t)
+        elapsedBase = t
+        elapsedTimestamp = Date()
+        controller.seek(toTime: t)
         updateLyricIndex()
-        scheduleRefresh()
-    }
-
-    private func scheduleRefresh() {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
-            self?.refresh()
-            self?.refreshPlaying()
-        }
     }
 
     // MARK: File shelf
