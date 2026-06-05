@@ -217,12 +217,19 @@ final class MediaController {
         out.fileHandleForReading.readabilityHandler = { [weak self] handle in
             let chunk = handle.availableData
             guard !chunk.isEmpty else { return }
-            Task { @MainActor in self?.ingest(chunk) }
+            // Hop to the main actor via the serial main queue (NOT an unstructured
+            // Task, which has no ordering guarantee): the adapter splits large
+            // updates — artwork is hundreds of KB — across several readability
+            // callbacks, so chunks must reach `ingest`'s shared lineBuffer in the
+            // exact order they arrived or the newline-delimited JSON gets scrambled.
+            DispatchQueue.main.async { self?.ingest(chunk) }
         }
 
         process.terminationHandler = { [weak self] proc in
             let status = proc.terminationStatus
-            Task { @MainActor in
+            // Same serial main-queue hop as ingest, so the relaunch (which resets
+            // lineBuffer) is ordered after any chunks already queued from this pipe.
+            DispatchQueue.main.async {
                 guard let self, self.backend == .adapter else { return }
                 NSLog("Canopy: adapter stream exited (status \(status)); restarting")
                 // The stream is meant to run forever; relaunch unless we've stopped.
