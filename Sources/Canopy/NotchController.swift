@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import Combine
 
 struct NotchMetrics {
     var notchWidth: CGFloat
@@ -19,6 +20,7 @@ enum NotchPresentation {
 @MainActor
 final class NotchController {
     private let model: NowPlayingModel
+    private let settings: SettingsStore
     private let window: NSPanel
     private let hosting: NotchHostingView
 
@@ -30,9 +32,11 @@ final class NotchController {
     private var presentation: NotchPresentation = .collapsed
 
     private var collapseWork: DispatchWorkItem?
+    private var cancellables: Set<AnyCancellable> = []
 
-    init(model: NowPlayingModel) {
+    init(model: NowPlayingModel, settings: SettingsStore) {
         self.model = model
+        self.settings = settings
 
         screen = NotchController.notchScreen()
         metrics = NotchController.notchMetrics(for: screen)
@@ -53,7 +57,7 @@ final class NotchController {
         window.isMovable = false
         window.hidesOnDeactivate = false
 
-        let root = NotchView(vm: model, metrics: metrics) { _ in }
+        let root = NotchView(vm: model, settings: settings, metrics: metrics) { _ in }
         hosting = NotchHostingView(rootView: root)
         window.contentView = hosting
 
@@ -69,6 +73,13 @@ final class NotchController {
             name: NSApplication.didChangeScreenParametersNotification,
             object: nil
         )
+
+        // Re-size live when the user changes the notch size in the menu.
+        settings.$notchSize
+            .dropFirst()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.applySizeChange() }
+            .store(in: &cancellables)
     }
 
     deinit {
@@ -91,12 +102,14 @@ final class NotchController {
     }
 
     private func rebuildRootView() {
-        hosting.rootView = NotchView(vm: model, metrics: metrics) { [weak self] presentation in
+        hosting.rootView = NotchView(vm: model, settings: settings, metrics: metrics) { [weak self] presentation in
             self?.present(presentation)
         }
     }
 
     private func recomputeSizes() {
+        let size = settings.notchSize
+
         // Collapsed: notch width + small "peeks" on each side for art / bars.
         let peek: CGFloat = 86
         collapsedSize = CGSize(
@@ -104,13 +117,24 @@ final class NotchController {
             height: metrics.notchHeight
         )
         expandedSize = CGSize(
-            width: max(metrics.notchWidth + 360, 420),
-            height: 196
+            width: max(metrics.notchWidth + size.extraWidth, size.minWidth),
+            height: size.expandedHeight
         )
         bannerSize = CGSize(
-            width: max(metrics.notchWidth + 320, 400),
-            height: 80
+            width: max(metrics.notchWidth + size.extraWidth - 40, size.minWidth - 20),
+            height: size.bannerHeight
         )
+    }
+
+    /// React to a live notch-size change: recompute and re-apply the current
+    /// presentation at the new dimensions.
+    private func applySizeChange() {
+        recomputeSizes()
+        switch presentation {
+        case .expanded: animate(to: expandedSize)
+        case .banner:   animate(to: bannerSize)
+        case .collapsed: position(for: collapsedSize)
+        }
     }
 
     // MARK: Presentation

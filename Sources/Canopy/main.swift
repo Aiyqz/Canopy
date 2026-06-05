@@ -20,6 +20,19 @@ MainActor.assumeIsolated {
         exit(0)
     }
 
+    // Single-instance guard: if another Canopy is already running, bow out so we
+    // never end up with two overlapping notch panels ("comes up twice").
+    let me = NSRunningApplication.current
+    let duplicates = NSWorkspace.shared.runningApplications.filter {
+        $0.bundleIdentifier != nil
+            && $0.bundleIdentifier == me.bundleIdentifier
+            && $0.processIdentifier != me.processIdentifier
+    }
+    if !duplicates.isEmpty {
+        duplicates.first?.activate(options: [])
+        exit(0)
+    }
+
     let delegate = AppDelegate()
     app.delegate = delegate
     // Accessory: no Dock icon, no main menu — lives in the menu bar + notch.

@@ -11,7 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         model.start()
-        notchController = NotchController(model: model)
+        notchController = NotchController(model: model, settings: settings)
         widgetController = WidgetController(model: model, settings: settings)
 
         mirror.onBanner = { [weak self] banner in self?.model.pushBanner(banner) }
@@ -70,6 +70,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         menu.addItem(.separator())
 
+        // Notch size (Small / Medium / Large).
+        let sizeItem = NSMenuItem(title: "Notch Size", action: nil, keyEquivalent: "")
+        let sizeMenu = NSMenu()
+        for size in NotchSize.allCases {
+            let entry = NSMenuItem(title: size.title, action: #selector(selectNotchSize(_:)), keyEquivalent: "")
+            entry.target = self
+            entry.representedObject = size.rawValue
+            entry.state = settings.notchSize == size ? .on : .off
+            sizeMenu.addItem(entry)
+        }
+        sizeItem.submenu = sizeMenu
+        menu.addItem(sizeItem)
+
+        // Hover style (Solid Black / Subtle Gradient).
+        let hoverItem = NSMenuItem(title: "Hover Style", action: nil, keyEquivalent: "")
+        let hoverMenu = NSMenu()
+        for style in HoverStyle.allCases {
+            let entry = NSMenuItem(title: style.title, action: #selector(selectHoverStyle(_:)), keyEquivalent: "")
+            entry.target = self
+            entry.representedObject = style.rawValue
+            entry.state = settings.hoverStyle == style ? .on : .off
+            hoverMenu.addItem(entry)
+        }
+        hoverItem.submenu = hoverMenu
+        menu.addItem(hoverItem)
+
+        menu.addItem(.separator())
+
         let launch = NSMenuItem(
             title: "Launch at Login",
             action: #selector(toggleLaunchAtLogin),
@@ -123,6 +151,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
               let preset = WidgetPreset(rawValue: raw) else { return }
         settings.preset = preset
         if !settings.widgetVisible { settings.widgetVisible = true }
+        rebuildMenu()
+    }
+
+    @objc private func selectNotchSize(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String,
+              let size = NotchSize(rawValue: raw) else { return }
+        settings.notchSize = size
+        rebuildMenu()
+    }
+
+    @objc private func selectHoverStyle(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String,
+              let style = HoverStyle(rawValue: raw) else { return }
+        settings.hoverStyle = style
         rebuildMenu()
     }
 

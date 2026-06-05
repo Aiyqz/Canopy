@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 /// drop) swaps between the collapsed pill and the expanded media panel.
 struct NotchView: View {
     @ObservedObject var vm: NowPlayingModel
+    @ObservedObject var settings: SettingsStore
     let metrics: NotchMetrics
     let onPresent: (NotchPresentation) -> Void
 
@@ -37,13 +38,21 @@ struct NotchView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(
             ZStack {
+                // Always solid black so the island reads as an extension of the
+                // physical notch.
                 NotchShape().fill(.black)
-                if isOpen {
+                if isOpen, settings.hoverStyle == .subtleGradient {
+                    // A faint light sheen over the black — still dark, just a hint
+                    // of dimension. (Not the album-color tint, which floated.)
                     NotchShape()
                         .fill(
                             LinearGradient(
-                                colors: vm.palette.prefix(2).map { $0.opacity(0.22) },
-                                startPoint: .topLeading, endPoint: .bottomTrailing
+                                colors: [
+                                    Color.white.opacity(0.14),
+                                    Color.white.opacity(0.03),
+                                    Color.clear
+                                ],
+                                startPoint: .top, endPoint: .bottom
                             )
                         )
                 }
