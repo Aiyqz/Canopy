@@ -82,6 +82,8 @@ final class WidgetController {
         let root = WidgetView(vm: model, preset: preset)
         let hosting = NSHostingView(rootView: root)
         hosting.frame = NSRect(origin: .zero, size: window.frame.size)
+        // Track the window during the resize animation so content doesn't snap.
+        hosting.autoresizingMask = [.width, .height]
         window.contentView = hosting
     }
 

@@ -29,6 +29,7 @@ final class NotchController {
     private var collapsedSize: CGSize = .zero
     private var expandedSize: CGSize = .zero
     private var bannerSize: CGSize = .zero
+    private var expandedContentHeight: CGFloat = 196
     private var presentation: NotchPresentation = .collapsed
 
     private var collapseWork: DispatchWorkItem?
@@ -102,9 +103,13 @@ final class NotchController {
     }
 
     private func rebuildRootView() {
-        hosting.rootView = NotchView(vm: model, settings: settings, metrics: metrics) { [weak self] presentation in
-            self?.present(presentation)
-        }
+        hosting.rootView = NotchView(
+            vm: model,
+            settings: settings,
+            metrics: metrics,
+            onPresent: { [weak self] presentation in self?.present(presentation) },
+            onExpandedHeight: { [weak self] height in self?.setExpandedContentHeight(height) }
+        )
     }
 
     private func recomputeSizes() {
@@ -116,14 +121,26 @@ final class NotchController {
             width: metrics.notchWidth + peek * 2,
             height: metrics.notchHeight
         )
+        // Width is driven by the size setting; height follows the content (see
+        // setExpandedContentHeight) so the island never clips its controls/shelf.
         expandedSize = CGSize(
             width: max(metrics.notchWidth + size.extraWidth, size.minWidth),
-            height: size.expandedHeight
+            height: max(expandedContentHeight, 80)
         )
         bannerSize = CGSize(
             width: max(metrics.notchWidth + size.extraWidth - 40, size.minWidth - 20),
             height: size.bannerHeight
         )
+    }
+
+    /// The expanded panel reports its natural height; grow/shrink the window to
+    /// match so content is never clipped (and the island morphs to its content).
+    private func setExpandedContentHeight(_ height: CGFloat) {
+        let clamped = max(height, 80)
+        guard abs(clamped - expandedContentHeight) > 0.5 else { return }
+        expandedContentHeight = clamped
+        expandedSize.height = clamped
+        if presentation == .expanded { animate(to: expandedSize) }
     }
 
     /// React to a live notch-size change: recompute and re-apply the current

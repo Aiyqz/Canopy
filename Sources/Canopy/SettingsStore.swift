@@ -61,18 +61,20 @@ enum NotchSize: String, CaseIterable, Identifiable {
         case .large:  return 520
         }
     }
-    var expandedHeight: CGFloat {
-        switch self {
-        case .small:  return 168
-        case .medium: return 196
-        case .large:  return 240
-        }
-    }
     var bannerHeight: CGFloat {
         switch self {
         case .small:  return 72
         case .medium: return 80
         case .large:  return 92
+        }
+    }
+    /// Multiplier applied to the expanded panel's content (artwork, type, controls)
+    /// so the size setting actually scales what you see, not just the box.
+    var contentScale: CGFloat {
+        switch self {
+        case .small:  return 0.9
+        case .medium: return 1.0
+        case .large:  return 1.18
         }
     }
 }

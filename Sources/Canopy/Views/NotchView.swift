@@ -3,11 +3,21 @@ import UniformTypeIdentifiers
 
 /// The root view that fills the floating notch window. Hover (or an active file
 /// drop) swaps between the collapsed pill and the expanded media panel.
+/// Preference key the expanded panel uses to report its natural height so the
+/// notch window can morph to fit its content (no clipping, Dynamic-Island style).
+struct ExpandedHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
 struct NotchView: View {
     @ObservedObject var vm: NowPlayingModel
     @ObservedObject var settings: SettingsStore
     let metrics: NotchMetrics
     let onPresent: (NotchPresentation) -> Void
+    var onExpandedHeight: (CGFloat) -> Void = { _ in }
 
     @State private var hovering = false
 
@@ -23,7 +33,12 @@ struct NotchView: View {
         ZStack(alignment: .top) {
             switch presentation {
             case .expanded:
-                ExpandedPanel(vm: vm)
+                ExpandedPanel(vm: vm, scale: settings.notchSize.contentScale)
+                    .background(
+                        GeometryReader { proxy in
+                            Color.clear.preference(key: ExpandedHeightKey.self, value: proxy.size.height)
+                        }
+                    )
                     .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .top)))
             case .banner:
                 if let banner = vm.currentBanner {
@@ -72,6 +87,9 @@ struct NotchView: View {
         .onDrop(of: [.fileURL], isTargeted: dropBinding) { providers in
             handleDrop(providers)
             return true
+        }
+        .onPreferenceChange(ExpandedHeightKey.self) { height in
+            if height > 1 { onExpandedHeight(height) }
         }
         .animation(.spring(response: 0.4, dampingFraction: 0.82), value: presentation)
     }
@@ -182,20 +200,22 @@ struct BannerView: View {
 
 struct ExpandedPanel: View {
     @ObservedObject var vm: NowPlayingModel
+    var scale: CGFloat = 1
 
     private var accent: Color { vm.palette.first ?? .white }
+    private func s(_ x: CGFloat) -> CGFloat { x * scale }
 
     var body: some View {
-        VStack(spacing: 10) {
-            HStack(spacing: 12) {
-                Artwork(image: vm.artwork, size: 52, corner: 10)
+        VStack(spacing: s(10)) {
+            HStack(spacing: s(12)) {
+                Artwork(image: vm.artwork, size: s(52), corner: s(10))
                 VStack(alignment: .leading, spacing: 3) {
                     Text(vm.hasMedia ? vm.title : "Nothing Playing")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(size: s(13), weight: .semibold))
                         .foregroundStyle(.white)
                         .lineLimit(1)
                     Text(vm.hasMedia ? vm.artist : "Canopy")
-                        .font(.system(size: 11))
+                        .font(.system(size: s(11)))
                         .foregroundStyle(.white.opacity(0.6))
                         .lineLimit(1)
                 }
@@ -205,7 +225,7 @@ struct ExpandedPanel: View {
 
             if let lyric = vm.currentLyric {
                 Text(lyric)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: s(12), weight: .semibold))
                     .foregroundStyle(
                         LinearGradient(colors: lyricColors, startPoint: .leading, endPoint: .trailing)
                     )
@@ -221,10 +241,10 @@ struct ExpandedPanel: View {
 
             ScrubBar(vm: vm, accent: accent)
 
-            HStack(spacing: 28) {
-                ControlButton(system: "backward.fill", size: 16) { vm.previous() }
-                ControlButton(system: vm.isPlaying ? "pause.fill" : "play.fill", size: 22) { vm.togglePlayPause() }
-                ControlButton(system: "forward.fill", size: 16) { vm.next() }
+            HStack(spacing: s(28)) {
+                ControlButton(system: "backward.fill", size: s(16)) { vm.previous() }
+                ControlButton(system: vm.isPlaying ? "pause.fill" : "play.fill", size: s(22)) { vm.togglePlayPause() }
+                ControlButton(system: "forward.fill", size: s(16)) { vm.next() }
             }
             .disabled(!vm.hasMedia)
             .opacity(vm.hasMedia ? 1 : 0.4)
@@ -234,10 +254,10 @@ struct ExpandedPanel: View {
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
         }
-        .padding(.horizontal, 18)
-        .padding(.top, 14)
-        .padding(.bottom, 12)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .padding(.horizontal, s(18))
+        .padding(.top, s(14))
+        .padding(.bottom, s(12))
+        .frame(maxWidth: .infinity, alignment: .top)
     }
 
     private var lyricColors: [Color] {
@@ -435,38 +455,40 @@ enum NotchSnapshotter {
         return model
     }
 
+    /// Overlays a panel on the solid-black notch shape at a fixed width and its
+    /// natural (content-driven) height — matching the live app's morphing island.
+    static func island<P: View>(_ panel: P, width: CGFloat) -> some View {
+        panel
+            .frame(width: width)
+            .background(NotchShape().fill(.black))
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
     static func run(to directory: String) {
-        let model = sampleModel()
         let metrics = NotchMetrics(notchWidth: 200, notchHeight: 34)
 
-        let expanded = ZStack {
-            NotchShape().fill(.black)
-            NotchShape().fill(LinearGradient(colors: model.palette.prefix(2).map { $0.opacity(0.22) },
-                                             startPoint: .topLeading, endPoint: .bottomTrailing))
-            ExpandedPanel(vm: model)
+        // Expanded island at each size (content scales; height follows content).
+        for size in NotchSize.allCases {
+            let width = max(metrics.notchWidth + size.extraWidth, size.minWidth)
+            let panel = ExpandedPanel(vm: sampleModel(), scale: size.contentScale)
+            write(island(panel, width: width), to: "\(directory)/canopy_expanded_\(size.rawValue).png")
         }
-        .frame(width: 460, height: 210)
+        // Default expanded image = medium.
+        let mediumWidth = max(metrics.notchWidth + NotchSize.medium.extraWidth, NotchSize.medium.minWidth)
+        write(island(ExpandedPanel(vm: sampleModel(), scale: 1), width: mediumWidth),
+              to: "\(directory)/canopy_expanded.png")
 
         let collapsed = ZStack {
             NotchShape().fill(.black)
-            CollapsedPill(vm: model, metrics: metrics)
+            CollapsedPill(vm: sampleModel(), metrics: metrics)
         }
         .frame(width: metrics.notchWidth + 172, height: metrics.notchHeight)
 
-        // A separate instance with the file shelf populated.
-        let shelfModel = sampleModel(withShelf: true)
-        let shelf = ZStack {
-            NotchShape().fill(.black)
-            NotchShape().fill(LinearGradient(colors: model.palette.prefix(2).map { $0.opacity(0.22) },
-                                             startPoint: .topLeading, endPoint: .bottomTrailing))
-            ExpandedPanel(vm: shelfModel)
-        }
-        .frame(width: 460, height: 268)
+        // Expanded with the file shelf populated.
+        let shelf = island(ExpandedPanel(vm: sampleModel(withShelf: true), scale: 1), width: mediumWidth)
 
         let banner = ZStack {
             NotchShape().fill(.black)
-            NotchShape().fill(LinearGradient(colors: model.palette.prefix(2).map { $0.opacity(0.22) },
-                                             startPoint: .topLeading, endPoint: .bottomTrailing))
             BannerView(banner: NotchBanner(
                 title: "Messages",
                 subtitle: "Alex",
@@ -477,7 +499,6 @@ enum NotchSnapshotter {
         }
         .frame(width: 440, height: 80)
 
-        write(expanded, to: "\(directory)/canopy_expanded.png")
         write(collapsed, to: "\(directory)/canopy_collapsed.png")
         write(shelf, to: "\(directory)/canopy_shelf.png")
         write(banner, to: "\(directory)/canopy_banner.png")
