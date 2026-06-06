@@ -63,3 +63,27 @@ targets:
         # no asset catalog is required.
         ASSETCATALOG_COMPILER_APPICON_NAME: ""
         COMBINE_HIDPI_IMAGES: YES
+
+  # macOS screen saver (.saver bundle). Pure consumer of the now-playing frames
+  # the app renders into the shared App Group container. Build + install it with
+  # Scripts/install-screensaver.sh, or it appears in `xcodebuild` as its own product.
+  CanopyScreenSaver:
+    type: bundle
+    platform: macOS
+    sources:
+      - path: Sources/CanopyScreenSaver
+      # Shared IPC surface, compiled into both targets.
+      - path: Sources/Canopy/CanopyShared.swift
+    dependencies:
+      - sdk: ScreenSaver.framework
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: pro.getcanopy.screensaver
+        PRODUCT_NAME: CanopyScreenSaver
+        # A screen saver is a bundle with the .saver wrapper extension.
+        WRAPPER_EXTENSION: saver
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: Sources/CanopyScreenSaver/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Sources/CanopyScreenSaver/CanopyScreenSaver.entitlements
+        ENABLE_HARDENED_RUNTIME: YES
+        SKIP_INSTALL: YES

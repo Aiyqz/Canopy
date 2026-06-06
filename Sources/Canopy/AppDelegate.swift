@@ -7,6 +7,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let mirror = NotificationMirror()
     private var notchController: NotchController?
     private var widgetController: WidgetController?
+    private var lockscreenFeed: LockscreenFeed?
     private var settingsWindow: SettingsWindowController?
     private var statusItem: NSStatusItem?
 
@@ -14,6 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         model.start()
         notchController = NotchController(model: model, settings: settings)
         widgetController = WidgetController(model: model, settings: settings)
+        lockscreenFeed = LockscreenFeed(model: model, settings: settings)
 
         mirror.onBanner = { [weak self] banner in self?.model.pushBanner(banner) }
         mirror.onStatusChange = { [weak self] in self?.rebuildMenu() }
@@ -112,6 +114,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         menu.addItem(.separator())
 
+        // Feed the current widget preset to the Canopy screen saver.
+        let saverToggle = NSMenuItem(
+            title: "Show on Screen Saver",
+            action: #selector(toggleScreenSaver),
+            keyEquivalent: ""
+        )
+        saverToggle.target = self
+        saverToggle.state = settings.screenSaverEnabled ? .on : .off
+        menu.addItem(saverToggle)
+
+        let saverSettings = NSMenuItem(
+            title: "Open Screen Saver Settings…",
+            action: #selector(openScreenSaverSettings),
+            keyEquivalent: ""
+        )
+        saverSettings.target = self
+        menu.addItem(saverSettings)
+
+        menu.addItem(.separator())
+
         let launch = NSMenuItem(
             title: "Launch at Login",
             action: #selector(toggleLaunchAtLogin),
@@ -184,6 +206,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
               let style = HoverStyle(rawValue: raw) else { return }
         settings.hoverStyle = style
         rebuildMenu()
+    }
+
+    @objc private func toggleScreenSaver() {
+        settings.screenSaverEnabled.toggle()
+        rebuildMenu()
+    }
+
+    @objc private func openScreenSaverSettings() {
+        // Sonoma+ moved this to the Wallpaper/Screen Saver settings extension;
+        // fall back to the legacy pane on older systems.
+        let urls = [
+            "x-apple.systempreferences:com.apple.ScreenSaver-Settings.extension",
+            "x-apple.systempreferences:com.apple.preference.desktopscreeneffect"
+        ].compactMap(URL.init(string:))
+        if let url = urls.first { NSWorkspace.shared.open(url) }
     }
 
     @objc private func toggleLaunchAtLogin() {

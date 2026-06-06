@@ -112,6 +112,10 @@ final class SettingsStore: ObservableObject {
     @Published var hoverStyle: HoverStyle {
         didSet { defaults.set(hoverStyle.rawValue, forKey: "hoverStyle") }
     }
+    /// Feed the selected widget preset to the Canopy screen saver (off by default).
+    @Published var screenSaverEnabled: Bool {
+        didSet { defaults.set(screenSaverEnabled, forKey: "screenSaverEnabled") }
+    }
 
     init() {
         // Default the widget ON for first launch (no stored value yet).
@@ -126,6 +130,7 @@ final class SettingsStore: ObservableObject {
             ?? .medium
         hoverStyle = HoverStyle(rawValue: defaults.string(forKey: "hoverStyle") ?? "")
             ?? .solidBlack
+        screenSaverEnabled = defaults.bool(forKey: "screenSaverEnabled")
     }
 }
 

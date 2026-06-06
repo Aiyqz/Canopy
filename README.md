@@ -8,7 +8,8 @@ A refined, productivity-focused **Dynamic Island experience for macOS** — a na
 
 - **Notch media player** — a black slab that hugs the notch and expands on hover into a full player: artwork, title/artist, animated EQ bars, a **scrubbable** progress bar, and play / prev / next. Reads & controls whatever is playing system-wide via the bundled [mediaremote-adapter](https://github.com/ungive/mediaremote-adapter) (works on macOS 15.4+, where direct `MediaRemote` access is otherwise blocked), with automatic fallback to the in-process `MediaRemote` bridge and then to AppleScript control of Music / Spotify.
 - **Time-synced lyrics** — fetched from [LRCLIB](https://lrclib.net) (free, no API key), parsed from LRC, and tracked against playback. Shown in the notch and the widget with **Apple-Music-style color gradients** sampled from the album art. **Tap a line to seek.**
-- **Liquid Glass lockscreen widget** — a frosted-glass desktop widget (behind-window blur + album-art gradient) with **4 presets**: Lockscreen (iOS-style clock + now-playing card), Now Playing (art-forward), Lyrics (scrolling synced), and Minimal Clock.
+- **Liquid Glass widget** — a frosted-glass **desktop** widget (behind-window blur + album-art gradient) with **4 presets**: Lockscreen-style (iOS clock + now-playing card), Now Playing (art-forward), Lyrics (scrolling synced), and Minimal Clock.
+- **Screen saver** — the same now-playing card as a macOS screen saver, the closest thing macOS allows to a lock-screen widget (third-party apps can't draw on the real lock screen). See [Screen saver](#screen-saver).
 - **Notch banners** — now-playing changes and **mirrored system notifications** slide down from the notch. Mirroring tails the Notification Center database (requires Full Disk Access; degrades gracefully).
 - **File-drop shelf** — drop files onto the notch to stash them, then drag them back out, reveal in Finder, or clear.
 - **Menu-bar app** — no Dock icon. Toggle the widget, switch presets, enable Launch at Login, and grant access from the leaf menu.
@@ -68,6 +69,41 @@ swift run Canopy --icon /tmp/icon.png
 - **Media control / now-playing** — works out of the box via the bundled adapter. If the adapter is unavailable and Canopy falls back to AppleScript, macOS shows a one-time **Automation** prompt to allow controlling Music / Spotify.
 - **Notification mirroring** — needs **Full Disk Access** (System Settings → Privacy & Security → Full Disk Access → add Canopy). The leaf menu shows live status and a shortcut to the settings pane. Now-playing banners work without it.
 
+## Screen saver
+
+macOS has **no third-party lock-screen widget API** — the lock screen is drawn by
+a separate secure process and your app's windows are hidden while locked. The
+closest supported surface is a **screen saver**, so Canopy ships one
+(`CanopyScreenSaver.saver`).
+
+It works as a producer/consumer pair, because the screen-saver sandbox can't read
+media or spawn helpers:
+
+- The **app** renders the selected widget preset to a PNG ~once a second into a
+  shared **App Group** container (`LockscreenFeed` → `CanopyShared`).
+- The **saver** is a pure consumer that draws the latest frame
+  (`CanopyScreenSaverView`).
+
+### Install
+
+```sh
+./Scripts/install-screensaver.sh     # builds + copies CanopyScreenSaver.saver
+```
+
+Then enable **“Show on Screen Saver”** from the Canopy menu, and pick **Canopy**
+in System Settings → Screen Saver.
+
+### Signing requirement & caveats
+
+- The app and the saver **must be signed with the same Apple Team ID** and share
+  the App Group `group.pro.getcanopy.shared` — that's the only directory a
+  sandboxed saver can read. Set `DEVELOPMENT_TEAM` (env var for the script, or in
+  the Xcode project). **Ad-hoc/unsigned builds** can't share the container, so the
+  saver shows a placeholder.
+- This reliably shows while the Mac is **idle / screensaving**. Once it is *fully
+  locked*, the saver runs in a restricted context that may not reach your
+  session's frames — that's a macOS limitation, not a Canopy bug.
+
 ## Project layout
 
 | Path | Purpose |
@@ -83,6 +119,8 @@ swift run Canopy --icon /tmp/icon.png
 | `ColorExtractor.swift` | Album-art → gradient palette |
 | `NotchController.swift` / `Views/NotchView.swift` | The notch window + collapsed / banner / expanded UI |
 | `WidgetController.swift` / `Views/WidgetView.swift` / `Views/WidgetContent.swift` | Liquid Glass desktop widget + presets |
+| `LockscreenFeed.swift` / `CanopyShared.swift` | Renders widget frames to the shared App Group container for the saver |
+| `Sources/CanopyScreenSaver/` / `Scripts/install-screensaver.sh` | The `.saver` bundle (frame consumer) + installer |
 | `NotificationMirror.swift` | Notification Center DB tailing |
 | `SettingsStore.swift` | Persisted settings + Launch at Login |
 | `AppIcon.swift` | Programmatic app icon |

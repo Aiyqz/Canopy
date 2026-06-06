@@ -12,5 +12,11 @@
          NSAppleEventsUsageDescription string in Info.plist. -->
     <key>com.apple.security.automation.apple-events</key>
     <true/>
+    <!-- Shared container the screen saver reads now-playing frames from. Requires
+         signing the app + the CanopyScreenSaver target with the same Team ID. -->
+    <key>com.apple.security.application-groups</key>
+    <array>
+        <string>group.pro.getcanopy.shared</string>
+    </array>
 </dict>
 </plist>
