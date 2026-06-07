@@ -54,6 +54,17 @@ struct SettingsView: View {
                     }
                 }
 
+                section("Screen Saver") {
+                    Toggle("Show on Screen Saver", isOn: $settings.screenSaverEnabled)
+                    Text("Feeds the selected widget style to the Canopy screen saver — the closest macOS allows to a lock-screen widget. Install it with Scripts/install-screensaver.sh, then pick Canopy in System Settings.")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                    HStack {
+                        Spacer()
+                        Button("Open Screen Saver Settings…") { openScreenSaverSettings() }
+                    }
+                }
+
                 section("Media") {
                     labeledRow("Backend") {
                         Text(model.mediaAvailable ? model.backendName : "unavailable")
@@ -117,6 +128,16 @@ struct SettingsView: View {
 
     private func openScreenRecording() {
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
+    private func openScreenSaverSettings() {
+        let candidates = [
+            "x-apple.systempreferences:com.apple.ScreenSaver-Settings.extension",
+            "x-apple.systempreferences:com.apple.preference.desktopscreeneffect"
+        ]
+        if let url = candidates.compactMap(URL.init(string:)).first {
             NSWorkspace.shared.open(url)
         }
     }

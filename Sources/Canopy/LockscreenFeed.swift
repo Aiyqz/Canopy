@@ -32,6 +32,7 @@ final class LockscreenFeed {
         timer?.invalidate()
         timer = nil
         guard on else { return }
+        CanopyShared.logResolutionOnce(role: "app")
         renderFrame()
         // 1 Hz keeps the clock and scrubber on the card current; rendering a
         // ~340×540 view offscreen is cheap.

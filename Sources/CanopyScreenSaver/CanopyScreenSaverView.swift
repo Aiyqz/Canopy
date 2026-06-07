@@ -29,6 +29,7 @@ final class CanopyScreenSaverView: ScreenSaverView {
 
     override func startAnimation() {
         super.startAnimation()
+        CanopyShared.logResolutionOnce(role: "saver")
         reload()
     }
 
@@ -83,8 +84,11 @@ final class CanopyScreenSaverView: ScreenSaverView {
     private func drawPlaceholder() {
         let paragraph = NSMutableParagraphStyle()
         paragraph.alignment = .center
+        let message = CanopyShared.isUsingAppGroup
+            ? "🌿 Canopy\nStart playback (and enable “Show on Screen Saver”) to see your now-playing card here."
+            : "🌿 Canopy\nApp Group unavailable — sign the app and screen saver with the same Apple Team ID. See README."
         let text = NSAttributedString(
-            string: "🌿 Canopy\nStart playback (and enable “Show on Screen Saver”) to see your now-playing card here.",
+            string: message,
             attributes: [
                 .foregroundColor: NSColor.white.withAlphaComponent(0.5),
                 .font: NSFont.systemFont(ofSize: max(14, bounds.height * 0.02), weight: .medium),
