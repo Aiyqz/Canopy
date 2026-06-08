@@ -260,10 +260,18 @@ private struct NotchPreview: View {
 
     var body: some View {
         ZStack {
+            // A faux desktop behind the island so the translucent glass has
+            // something to sit over, mirroring the notch floating on the wallpaper.
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color(nsColor: .windowBackgroundColor))
+                .fill(LinearGradient(
+                    colors: [Color(nsColor: .controlBackgroundColor),
+                             Color(nsColor: .windowBackgroundColor)],
+                    startPoint: .topLeading, endPoint: .bottomTrailing))
             ZStack {
-                NotchShape().fill(.black)
+                // Smoked glass — translucent so the desktop shows through, with
+                // "Clear" reading lighter than "Solid Black", matching the live
+                // tint levels in NotchView.
+                NotchShape().fill(.black.opacity(style == .subtleGradient ? 0.42 : 0.6))
                 if style == .subtleGradient {
                     NotchShape().fill(
                         LinearGradient(
@@ -281,8 +289,18 @@ private struct NotchPreview: View {
                 }
                 .padding(.horizontal, 14)
                 .frame(width: width, height: height)
+                // The same top-lit specular rim the real island carries.
+                NotchShape()
+                    .stroke(
+                        LinearGradient(
+                            colors: [.white.opacity(0.6), .white.opacity(0.14),
+                                     .clear, .white.opacity(0.07)],
+                            startPoint: .top, endPoint: .bottom),
+                        lineWidth: 0.8)
+                    .blendMode(.plusLighter)
             }
             .frame(width: width, height: height)
+            .shadow(color: .black.opacity(0.3), radius: 8, y: 4)
         }
         .frame(height: 120)
         .frame(maxWidth: .infinity)
