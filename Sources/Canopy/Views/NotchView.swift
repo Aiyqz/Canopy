@@ -519,12 +519,18 @@ private struct ControlButton: View {
             Image(systemName: system)
                 .font(.system(size: size, weight: .medium))
                 .foregroundStyle(.white)
+                // Morph the glyph when it swaps (play ⇄ pause) instead of a hard cut.
+                // Parameterless `.symbolEffect` (default replace) is macOS-14-safe.
+                .contentTransition(.symbolEffect)
                 .frame(width: size + 14, height: size + 14)
                 .background(background)
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
+        // A gentle spring on hover so the controls feel tactile under the cursor.
+        .scaleEffect(hovering ? 1.08 : 1)
+        .animation(.spring(response: 0.25, dampingFraction: 0.6), value: hovering)
         .onHover { hovering = $0 }
     }
 
