@@ -34,6 +34,14 @@ jobs:
       - name: Generate Xcode project
         run: xcodegen generate
 
+      # The MediaRemote adapter binaries are vendored (gitignored, built locally by
+      # Scripts/fetch-adapter.sh). CI only verifies compilation, so stub the paths
+      # the Copy Resources phase expects — the committed mediaremote-adapter.pl is real.
+      - name: Stub vendored adapter resources
+        run: |
+          mkdir -p Resources/MediaRemoteAdapter.framework
+          touch Resources/MediaRemoteAdapterTestClient
+
       # Build both products. The MediaRemote adapter resources are optional (not
       # committed), and signing is skipped — we only verify the code compiles.
       - name: Build Canopy.app
