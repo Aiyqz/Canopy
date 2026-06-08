@@ -45,6 +45,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
 
         let menu = NSMenu()
+        // We manage enabled state ourselves (e.g. disabling notch sub-items when
+        // the island is off; non-actionable header rows stay greyed).
+        menu.autoenablesItems = false
         menu.delegate = self
         item.menu = menu
         statusItem = item
@@ -112,6 +115,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             sizeMenu.addItem(entry)
         }
         sizeItem.submenu = sizeMenu
+        sizeItem.isEnabled = settings.notchEnabled
         menu.addItem(sizeItem)
 
         // Hover style (Solid Black / Subtle Gradient).
@@ -125,6 +129,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             hoverMenu.addItem(entry)
         }
         hoverItem.submenu = hoverMenu
+        hoverItem.isEnabled = settings.notchEnabled
         menu.addItem(hoverItem)
 
         menu.addItem(.separator())
