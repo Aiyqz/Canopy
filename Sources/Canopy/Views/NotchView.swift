@@ -513,6 +513,7 @@ private struct ControlButton: View {
     var action: () -> Void
 
     @State private var hovering = false
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     var body: some View {
         Button(action: action) {
@@ -535,9 +536,11 @@ private struct ControlButton: View {
     }
 
     @ViewBuilder private var background: some View {
-        if #available(macOS 26.0, *), prominent {
+        if #available(macOS 26.0, *), prominent, !reduceTransparency {
             // Real Liquid Glass for the primary control — a glass pebble that
-            // refracts the artwork behind it and reacts to touch.
+            // refracts the pane and desktop behind it and reacts to touch.
+            // Suppressed under Reduce Transparency so it stays consistent with
+            // the opaque island the accessibility setting produces.
             Color.clear.glassEffect(.regular.interactive(), in: Circle())
         } else {
             Circle().fill(.white.opacity(hovering ? 0.16 : (prominent ? 0.10 : 0)))
