@@ -47,19 +47,31 @@ struct WidgetView: View {
 
     @ViewBuilder private var background: some View {
         ZStack {
-            if snapshotMode || reduceTransparency {
-                LinearGradient(colors: [Color(white: 0.10), Color(white: 0.04)],
-                               startPoint: .top, endPoint: .bottom)
-            } else {
-                VisualEffectView()
-            }
-            // Apple-Music-style gradient tint from album art.
+            baseMaterial
+            // Apple-Music-style gradient tint from album art, infused into the glass.
             LinearGradient(
                 colors: gradientColors,
                 startPoint: .topLeading, endPoint: .bottomTrailing
             )
-            .opacity(snapshotMode ? 0.85 : 0.55)
+            .opacity(snapshotMode || reduceTransparency ? 0.85 : 0.5)
             .blur(radius: 8)
+        }
+    }
+
+    @ViewBuilder private var baseMaterial: some View {
+        if snapshotMode || reduceTransparency {
+            // Opaque for offscreen renders (ImageRenderer can't capture live glass)
+            // and for the Reduce Transparency accessibility setting.
+            LinearGradient(colors: [Color(white: 0.10), Color(white: 0.04)],
+                           startPoint: .top, endPoint: .bottom)
+        } else if #available(macOS 26.0, *) {
+            // Native Liquid Glass, matching the notch.
+            Color.clear.glassEffect(
+                .regular.interactive(),
+                in: RoundedRectangle(cornerRadius: corner, style: .continuous)
+            )
+        } else {
+            VisualEffectView()
         }
     }
 
