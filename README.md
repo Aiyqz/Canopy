@@ -20,7 +20,7 @@ A refined, productivity-focused **Dynamic Island experience for macOS** — a na
 ## Requirements
 
 - macOS 14+ (developed on macOS 26 / Apple Silicon)
-- Swift 6.2 / Xcode 26
+- Builds with Xcode 15.4+ (Swift 5.10) or newer — CI builds on a stock `macos-14` runner
 
 ## Build & run
 
