@@ -93,8 +93,24 @@ struct NotchView: View {
             }
         }
         .overlay(contentScrim)
+        .overlay(glassDepth)
         .shadow(color: .black.opacity(isOpen ? 0.5 : 0.3),
                 radius: isOpen ? 24 : 11, y: isOpen ? 13 : 5)
+    }
+
+    /// Implies the thickness of the glass: a soft dark gather hugging the lower
+    /// inner edge. Paired with the top-lit `specularRim`, it makes the pane read
+    /// as a convex lens catching light at the top and shadow at the base, rather
+    /// than a flat decal printed on the desktop.
+    private var glassDepth: some View {
+        NotchShape()
+            .stroke(
+                LinearGradient(colors: [.clear, .clear, .black.opacity(0.22)],
+                               startPoint: .top, endPoint: .bottom),
+                lineWidth: 1.2
+            )
+            .blur(radius: 0.5)
+            .allowsHitTesting(false)
     }
 
     /// A gentle top-weighted darkening laid *behind* the content (this whole view
