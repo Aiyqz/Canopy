@@ -12,9 +12,9 @@ concurrency:
 jobs:
   build:
     name: Build (macOS)
-    # macos-15 ships Xcode 16, which can read the project format XcodeGen emits
-    # (Xcode 15.4 on macos-14 cannot) and still satisfies `swift build`.
-    runs-on: macos-15
+    # macos-26 (Tahoe) ships Xcode 26, whose SDK has the Liquid Glass APIs
+    # (glassEffect) the notch uses behind macOS-26 availability guards.
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
 
@@ -22,6 +22,10 @@ jobs:
         run: |
           swift --version
           xcodebuild -version
+          echo "--- Installed Xcodes ---"
+          ls -d /Applications/Xcode*.app 2>/dev/null || true
+          echo "--- SDKs ---"
+          xcodebuild -showsdks 2>/dev/null | grep -i macos || true
 
       # Fast sanity build of the app via SwiftPM (the screen saver isn't an SPM
       # target, so it's covered by xcodebuild below).
