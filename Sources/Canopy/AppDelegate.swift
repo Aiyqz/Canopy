@@ -99,6 +99,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         styleItem.submenu = styleMenu
         menu.addItem(styleItem)
 
+        let resetPos = NSMenuItem(
+            title: "Reset Widget Position",
+            action: #selector(resetWidgetPosition),
+            keyEquivalent: ""
+        )
+        resetPos.target = self
+        menu.addItem(resetPos)
+
         menu.addItem(.separator())
 
         // Show the notch island at all.
@@ -232,6 +240,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard let raw = sender.representedObject as? String,
               let style = HoverStyle(rawValue: raw) else { return }
         settings.hoverStyle = style
+        rebuildMenu()
+    }
+
+    @objc private func resetWidgetPosition() {
+        widgetController?.resetPosition()
         rebuildMenu()
     }
 

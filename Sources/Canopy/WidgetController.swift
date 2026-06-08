@@ -32,6 +32,21 @@ final class WidgetController {
         apply(visible: settings.widgetVisible)
     }
 
+    /// Re-center the widget near the top-right of the main screen — a rescue for
+    /// when a saved position lands off-screen (e.g. a display was disconnected).
+    func resetPosition() {
+        if !settings.widgetVisible { settings.widgetVisible = true }
+        let window = self.window ?? makeWindow(preset: settings.preset)
+        self.window = window
+        if let screen = NSScreen.main {
+            let v = screen.visibleFrame
+            let size = settings.preset.size
+            window.setFrameOrigin(NSPoint(x: v.maxX - size.width - 40, y: v.maxY - size.height - 40))
+            window.saveFrame(usingName: "CanopyWidget")
+        }
+        window.orderFront(nil)
+    }
+
     private func apply(visible: Bool) {
         if visible {
             show()
