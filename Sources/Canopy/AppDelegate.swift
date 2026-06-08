@@ -30,6 +30,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
 
         setUpStatusItem()
+
+        // First launch: open Settings once so people discover the options and the
+        // permission shortcuts (it's an accessory app with no Dock icon).
+        if !UserDefaults.standard.bool(forKey: "didLaunchBefore") {
+            UserDefaults.standard.set(true, forKey: "didLaunchBefore")
+            settingsWindow?.show()
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
