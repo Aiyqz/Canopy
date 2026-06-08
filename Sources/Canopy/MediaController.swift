@@ -93,7 +93,7 @@ final class MediaController {
             let ok = Self.runHealthCheck(
                 perl: perl, script: scriptPath, framework: frameworkPath, testClient: testClient
             )
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
                 guard let self else { return }
                 if ok {
                     self.backend = .adapter
@@ -341,7 +341,7 @@ final class MediaController {
     private func emitMediaRemoteSnapshot() {
         MediaRemote.shared.getNowPlayingInfo { [weak self] info in
             MediaRemote.shared.getIsPlaying { playing in
-                Task { @MainActor in
+                Task { @MainActor [weak self] in
                     guard let self else { return }
                     var s = NowPlayingSnapshot()
                     s.title  = info[MediaRemote.kTitle]  as? String ?? ""

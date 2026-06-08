@@ -109,6 +109,9 @@ struct NotchView: View {
     }
 
     private func handleDrop(_ providers: [NSItemProvider]) {
+        // Bind the model to a local so the load callbacks capture a clean Sendable
+        // reference rather than the View's captured `self`.
+        let model = vm
         for provider in providers {
             provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
                 var url: URL?
@@ -119,7 +122,7 @@ struct NotchView: View {
                 }
                 // Only accept real on-disk file URLs.
                 guard let url, url.isFileURL else { return }
-                DispatchQueue.main.async { vm.addFiles([url]) }
+                DispatchQueue.main.async { model.addFiles([url]) }
             }
         }
     }
