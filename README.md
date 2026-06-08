@@ -8,7 +8,7 @@ A refined, productivity-focused **Dynamic Island experience for macOS** — a na
 
 ## Features
 
-- **Notch media player** — a black slab that hugs the notch and expands on hover into a full player: artwork, title/artist, animated EQ bars, a **scrubbable** progress bar, and play / prev / next. Reads & controls whatever is playing system-wide via the bundled [mediaremote-adapter](https://github.com/ungive/mediaremote-adapter) (works on macOS 15.4+, where direct `MediaRemote` access is otherwise blocked), with automatic fallback to the in-process `MediaRemote` bridge and then to AppleScript control of Music / Spotify.
+- **Notch media player** — a Liquid Glass slab that hugs the notch and expands on hover into a full player: artwork, title/artist, animated EQ bars, a **scrubbable** progress bar, and play / prev / next. On **macOS 26** it uses Apple's native **Liquid Glass** material (real refraction, specular edges, depth, interactive response); older systems get a refined dark frosted-glass fallback. Reads & controls whatever is playing system-wide via the bundled [mediaremote-adapter](https://github.com/ungive/mediaremote-adapter) (works on macOS 15.4+, where direct `MediaRemote` access is otherwise blocked), with automatic fallback to the in-process `MediaRemote` bridge and then to AppleScript control of Music / Spotify.
 - **Time-synced lyrics** — fetched from [LRCLIB](https://lrclib.net) (free, no API key), parsed from LRC, and tracked against playback. Shown in the notch and the widget with **Apple-Music-style color gradients** sampled from the album art. **Tap a line to seek.**
 - **Liquid Glass widget** — a frosted-glass **desktop** widget (behind-window blur + album-art gradient) with **4 presets**: Lockscreen-style (iOS clock + now-playing card), Now Playing (art-forward), Lyrics (scrolling synced), and Minimal Clock. Drag it anywhere — it remembers where you put it — and tune its **opacity**. The clock follows your system 12/24-hour and locale settings.
 - **Screen saver** — the same now-playing card as a macOS screen saver, the closest thing macOS allows to a lock-screen widget (third-party apps can't draw on the real lock screen). See [Screen saver](#screen-saver).
@@ -19,8 +19,8 @@ A refined, productivity-focused **Dynamic Island experience for macOS** — a na
 
 ## Requirements
 
-- macOS 14+ (developed on macOS 26 / Apple Silicon)
-- Builds with Xcode 15.4+ (Swift 5.10) or newer — CI builds on a stock `macos-14` runner
+- **Runs on** macOS 14+ (Liquid Glass on macOS 26; refined fallback below it)
+- **Builds with Xcode 26** — the Liquid Glass APIs (`glassEffect`) need the macOS 26 SDK at compile time, even though the app back-deploys to macOS 14. CI builds on a `macos-26` runner.
 
 ## Build & run
 
