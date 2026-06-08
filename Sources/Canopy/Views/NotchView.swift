@@ -92,8 +92,30 @@ struct NotchView: View {
                 legacyGlass
             }
         }
+        .overlay(contentScrim)
         .shadow(color: .black.opacity(isOpen ? 0.5 : 0.3),
                 radius: isOpen ? 24 : 11, y: isOpen ? 13 : 5)
+    }
+
+    /// A gentle top-weighted darkening laid *behind* the content (this whole view
+    /// is the island's `.background`). With the glass tint kept light so the
+    /// material shows, this is what keeps white text and glyphs legible over a
+    /// bright wallpaper — strongest at the top where the title and artwork sit,
+    /// fading downward so the lower glass stays clear. Skipped when collapsed
+    /// (no text) and under Reduce Transparency (already opaque).
+    @ViewBuilder private var contentScrim: some View {
+        if isOpen && !reduceTransparency {
+            LinearGradient(
+                stops: [
+                    .init(color: .black.opacity(0.30), location: 0),
+                    .init(color: .black.opacity(0.13), location: 0.5),
+                    .init(color: .black.opacity(0.08), location: 1)
+                ],
+                startPoint: .top, endPoint: .bottom
+            )
+            .clipShape(NotchShape())
+            .allowsHitTesting(false)
+        }
     }
 
     /// Opaque material honoring the Reduce Transparency accessibility setting.
@@ -309,7 +331,7 @@ struct ExpandedPanel: View {
             HStack(spacing: s(28)) {
                 ControlButton(system: "backward.fill", size: s(16), label: "Previous track") { vm.previous() }
                 ControlButton(system: vm.isPlaying ? "pause.fill" : "play.fill", size: s(22),
-                              label: vm.isPlaying ? "Pause" : "Play") { vm.togglePlayPause() }
+                              label: vm.isPlaying ? "Pause" : "Play", prominent: true) { vm.togglePlayPause() }
                 ControlButton(system: "forward.fill", size: s(16), label: "Next track") { vm.next() }
             }
             .disabled(!vm.hasMedia)
@@ -462,6 +484,9 @@ private struct ControlButton: View {
     var system: String
     var size: CGFloat
     var label: String
+    /// The primary action (play/pause) reads as a raised Liquid Glass chip;
+    /// secondary actions (prev/next) are bare glyphs that wash in on hover.
+    var prominent: Bool = false
     var action: () -> Void
 
     @State private var hovering = false
@@ -472,12 +497,22 @@ private struct ControlButton: View {
                 .font(.system(size: size, weight: .medium))
                 .foregroundStyle(.white)
                 .frame(width: size + 14, height: size + 14)
-                .background(Circle().fill(.white.opacity(hovering ? 0.14 : 0)))
+                .background(background)
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
         .onHover { hovering = $0 }
+    }
+
+    @ViewBuilder private var background: some View {
+        if #available(macOS 26.0, *), prominent {
+            // Real Liquid Glass for the primary control — a glass pebble that
+            // refracts the artwork behind it and reacts to touch.
+            Color.clear.glassEffect(.regular.interactive(), in: Circle())
+        } else {
+            Circle().fill(.white.opacity(hovering ? 0.16 : (prominent ? 0.10 : 0)))
+        }
     }
 }
 
