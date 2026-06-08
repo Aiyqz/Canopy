@@ -67,7 +67,7 @@ final class NowPlayingModel: ObservableObject {
         controller.start()
 
         ticker = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.tick() }
+            Task { @MainActor [weak self] in self?.tick() }
         }
     }
 

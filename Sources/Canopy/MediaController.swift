@@ -222,14 +222,14 @@ final class MediaController {
             // updates — artwork is hundreds of KB — across several readability
             // callbacks, so chunks must reach `ingest`'s shared lineBuffer in the
             // exact order they arrived or the newline-delimited JSON gets scrambled.
-            DispatchQueue.main.async { self?.ingest(chunk) }
+            DispatchQueue.main.async { [weak self] in self?.ingest(chunk) }
         }
 
         process.terminationHandler = { [weak self] proc in
             let status = proc.terminationStatus
             // Same serial main-queue hop as ingest, so the relaunch (which resets
             // lineBuffer) is ordered after any chunks already queued from this pipe.
-            DispatchQueue.main.async {
+            DispatchQueue.main.async { [weak self] in
                 guard let self, self.backend == .adapter else { return }
                 NSLog("Canopy: adapter stream exited (status \(status)); restarting")
                 // The stream is meant to run forever; relaunch unless we've stopped.
@@ -237,8 +237,8 @@ final class MediaController {
                 // spawns. The `=== proc` guards ensure we only relaunch this stream
                 // (not one a newer call already replaced).
                 guard self.streamProcess === proc else { return }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                    guard self.backend == .adapter, self.streamProcess === proc else { return }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+                    guard let self, self.backend == .adapter, self.streamProcess === proc else { return }
                     self.startAdapterStream(script: script, framework: framework)
                 }
             }
@@ -330,10 +330,10 @@ final class MediaController {
         MediaRemote.shared.registerForNotifications()
         let nc = NotificationCenter.default
         nc.addObserver(forName: MediaRemote.infoDidChange, object: nil, queue: .main) { [weak self] _ in
-            Task { @MainActor in self?.emitMediaRemoteSnapshot() }
+            Task { @MainActor [weak self] in self?.emitMediaRemoteSnapshot() }
         }
         nc.addObserver(forName: MediaRemote.isPlayingDidChange, object: nil, queue: .main) { [weak self] _ in
-            Task { @MainActor in self?.emitMediaRemoteSnapshot() }
+            Task { @MainActor [weak self] in self?.emitMediaRemoteSnapshot() }
         }
         emitMediaRemoteSnapshot()
     }
@@ -368,14 +368,14 @@ final class MediaController {
     private func startAppleScriptPolling() {
         pollAppleScript()
         appleScriptTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.pollAppleScript() }
+            Task { @MainActor [weak self] in self?.pollAppleScript() }
         }
     }
 
     private func pollAppleScript() {
         appleScript.snapshot { [weak self] snap in
             guard let snap else { return }
-            Task { @MainActor in self?.onSnapshot?(snap) }
+            Task { @MainActor [weak self] in self?.onSnapshot?(snap) }
         }
     }
 }

@@ -40,7 +40,7 @@ final class LockscreenFeed {
         // 1 Hz keeps the clock and scrubber on the card current; rendering a
         // ~340×540 view offscreen is cheap.
         timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.renderFrame() }
+            Task { @MainActor [weak self] in self?.renderFrame() }
         }
     }
 

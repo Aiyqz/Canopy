@@ -53,7 +53,7 @@ final class NotificationMirror {
         setStatus(.active)
         lastRecId = currentMaxRecId()
         timer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.poll() }
+            Task { @MainActor [weak self] in self?.poll() }
         }
     }
 
