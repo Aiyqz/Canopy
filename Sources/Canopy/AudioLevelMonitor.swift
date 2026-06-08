@@ -1,6 +1,7 @@
 import Foundation
 import ScreenCaptureKit
 import CoreMedia
+import CoreGraphics
 import Accelerate
 
 /// Real-time audio spectrum analyzer fed by ScreenCaptureKit system-audio
@@ -160,6 +161,20 @@ final class AudioLevelMonitor: NSObject, ObservableObject, SCStreamDelegate, SCS
         super.init()
     }
 
+    /// Whether Screen Recording (required to tap system audio) is granted.
+    static var isScreenRecordingAuthorized: Bool { CGPreflightScreenCaptureAccess() }
+
+    /// Ask for Screen Recording. macOS shows its prompt on first call; the grant
+    /// only takes effect after the app relaunches, so callers should tell the user
+    /// to restart. Returns the status *before* any relaunch.
+    @discardableResult
+    func requestScreenRecordingAccess() -> Bool {
+        let granted = CGRequestScreenCaptureAccess()
+        permissionDenied = !granted
+        if granted, enabled { Task { await startCapture() } }
+        return granted
+    }
+
     /// Start/stop capture to match playback (idempotent).
     func setEnabled(_ on: Bool) {
         guard on != enabled else { return }
@@ -184,11 +199,12 @@ final class AudioLevelMonitor: NSObject, ObservableObject, SCStreamDelegate, SCS
             config.capturesAudio = true
             config.sampleRate = 48_000
             config.channelCount = 1   // mono is all the analyzer needs
-            // We only want the audio tap, so make the (mandatory) video stream as
-            // cheap as possible: 2×2 px at the lowest frame rate. This keeps the
-            // capture session light on battery.
-            config.width = 2
-            config.height = 2
+            // We only want the audio tap, so make the (mandatory) video stream
+            // cheap: a small frame at 1 fps. (Pathologically tiny sizes can make
+            // the stream refuse to deliver, so keep it modest — at 1 fps the video
+            // cost is negligible regardless.)
+            config.width = 128
+            config.height = 72
             config.minimumFrameInterval = CMTime(value: 1, timescale: 1)
             config.queueDepth = 2
             config.excludesCurrentProcessAudio = true

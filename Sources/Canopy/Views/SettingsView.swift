@@ -87,17 +87,20 @@ struct SettingsView: View {
 
                     Divider()
 
-                    labeledRow("EQ bars") {
-                        Text(audio.levels.isEmpty ? "Animated" : "Live audio spectrum")
+                    labeledRow("Visualizer") {
+                        Text(audio.levels.isEmpty ? "Animated (not analyzing audio)" : "Live audio spectrum")
                             .foregroundStyle(.secondary)
                     }
                     if audio.levels.isEmpty {
-                        HStack {
-                            Text("Grant Screen Recording for bars that react to the audio.")
+                        HStack(alignment: .top) {
+                            Text("To make the bars react to your music, grant Screen Recording, then relaunch Canopy. (Canopy only reads audio levels.)")
                                 .font(.caption)
                                 .foregroundStyle(.tertiary)
-                            Spacer()
-                            Button("Open…") { openScreenRecording() }
+                                .fixedSize(horizontal: false, vertical: true)
+                            Spacer(minLength: 8)
+                            Button("Enable…") {
+                                if !audio.requestScreenRecordingAccess() { openScreenRecording() }
+                            }
                         }
                     }
                 }

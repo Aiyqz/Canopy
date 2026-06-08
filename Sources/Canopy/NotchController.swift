@@ -30,6 +30,9 @@ final class NotchController {
     private var expandedSize: CGSize = .zero
     private var bannerSize: CGSize = .zero
     private var expandedContentHeight: CGFloat = 196
+    /// False until SwiftUI reports the real expanded height. While false we use a
+    /// close estimate so the first expand sizes in one motion (no double resize).
+    private var hasMeasuredExpandedHeight = false
     private var presentation: NotchPresentation = .collapsed
 
     private var collapseWork: DispatchWorkItem?
@@ -115,6 +118,7 @@ final class NotchController {
     @objc private func screenParametersChanged() {
         screen = NotchController.notchScreen()
         metrics = NotchController.notchMetrics(for: screen)
+        hasMeasuredExpandedHeight = false   // notch height may have changed
         rebuildRootView()
         recomputeSizes()
         // Snap back to collapsed at the new geometry; hover will re-expand.
@@ -152,6 +156,11 @@ final class NotchController {
         )
         // Width is driven by the size setting; height follows the content (see
         // setExpandedContentHeight) so the island never clips its controls/shelf.
+        // Until we've measured, seed a close estimate so the first expand doesn't
+        // visibly grow twice.
+        if !hasMeasuredExpandedHeight {
+            expandedContentHeight = contentTopInset + 165 * size.contentScale
+        }
         expandedSize = CGSize(
             width: max(metrics.notchWidth + size.extraWidth, size.minWidth),
             height: max(expandedContentHeight, 80)
@@ -166,6 +175,7 @@ final class NotchController {
     /// match so content is never clipped (and the island morphs to its content).
     private func setExpandedContentHeight(_ height: CGFloat) {
         let clamped = max(height, 80)
+        hasMeasuredExpandedHeight = true
         guard abs(clamped - expandedContentHeight) > 0.5 else { return }
         expandedContentHeight = clamped
         expandedSize.height = clamped
@@ -175,6 +185,7 @@ final class NotchController {
     /// React to a live notch-size change: recompute and re-apply the current
     /// presentation at the new dimensions.
     private func applySizeChange() {
+        hasMeasuredExpandedHeight = false   // re-estimate for the new scale
         recomputeSizes()
         switch presentation {
         case .expanded: animate(to: expandedSize)

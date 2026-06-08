@@ -167,6 +167,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         saverSettings.target = self
         menu.addItem(saverSettings)
 
+        // Audio visualizer needs Screen Recording to tap system audio. Offer to
+        // enable it only while it's not yet granted.
+        if !AudioLevelMonitor.isScreenRecordingAuthorized {
+            let viz = NSMenuItem(
+                title: "Enable Audio Visualizer…",
+                action: #selector(enableVisualizer),
+                keyEquivalent: ""
+            )
+            viz.target = self
+            menu.addItem(viz)
+        }
+
         menu.addItem(.separator())
 
         let launch = NSMenuItem(
@@ -266,6 +278,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             "x-apple.systempreferences:com.apple.preference.desktopscreeneffect"
         ].compactMap(URL.init(string:))
         if let url = urls.first { NSWorkspace.shared.open(url) }
+    }
+
+    @objc private func enableVisualizer() {
+        // Trigger the system prompt (first time), then guide the user — the grant
+        // only takes effect after a relaunch.
+        let granted = AudioLevelMonitor.shared.requestScreenRecordingAccess()
+        if !granted {
+            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
+                NSWorkspace.shared.open(url)
+            }
+        }
+        let alert = NSAlert()
+        alert.messageText = "Make the visualizer react to your music"
+        alert.informativeText = "Enable Screen Recording for Canopy in System Settings, then quit and reopen Canopy. This lets the bars analyze the system audio that's playing.\n\nCanopy never records your screen — it only reads the audio levels."
+        alert.addButton(withTitle: "Open System Settings")
+        alert.addButton(withTitle: "Later")
+        NSApp.activate(ignoringOtherApps: true)
+        if alert.runModal() == .alertFirstButtonReturn,
+           let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
+            NSWorkspace.shared.open(url)
+        }
+        rebuildMenu()
     }
 
     @objc private func toggleLaunchAtLogin() {
