@@ -1,6 +1,8 @@
 # 🌿 Canopy
 
-A refined, productivity-focused **Dynamic Island experience for macOS** — a native SwiftUI app that wraps your Mac's notch with media controls, time-synced lyrics, a Liquid Glass lockscreen widget, a file-drop shelf, and notification mirroring.
+[![Build](https://github.com/6gx42o/Canopy/actions/workflows/build.yml/badge.svg)](https://github.com/6gx42o/Canopy/actions/workflows/build.yml)
+
+A refined, productivity-focused **Dynamic Island experience for macOS** — a native SwiftUI app that wraps your Mac's notch with media controls, time-synced lyrics, a Liquid Glass desktop widget, a matching screen saver, a file-drop shelf, and notification mirroring.
 
 > Inspired by [getcanopy.pro](https://getcanopy.pro/). Built from scratch in Swift.
 

@@ -1,0 +1,47 @@
+name: Build
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build (macOS)
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: |
+          swift --version
+          xcodebuild -version
+
+      # Fast sanity build of the app via SwiftPM (the screen saver isn't an SPM
+      # target, so it's covered by xcodebuild below).
+      - name: swift build
+        run: swift build -c release
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      # Build both products. The MediaRemote adapter resources are optional (not
+      # committed), and signing is skipped — we only verify the code compiles.
+      - name: Build Canopy.app
+        run: |
+          xcodebuild -project Canopy.xcodeproj -scheme Canopy \
+            -configuration Debug -destination 'platform=macOS' \
+            CODE_SIGNING_ALLOWED=NO build
+
+      - name: Build CanopyScreenSaver.saver
+        run: |
+          xcodebuild -project Canopy.xcodeproj -scheme CanopyScreenSaver \
+            -configuration Debug -destination 'platform=macOS' \
+            CODE_SIGNING_ALLOWED=NO build
