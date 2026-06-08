@@ -116,6 +116,15 @@ final class SettingsStore: ObservableObject {
     @Published var screenSaverEnabled: Bool {
         didSet { defaults.set(screenSaverEnabled, forKey: "screenSaverEnabled") }
     }
+    /// Show the notch island at all. Off lets people run Canopy as a menu-bar +
+    /// desktop-widget app only (handy on external/non-notch displays).
+    @Published var notchEnabled: Bool {
+        didSet { defaults.set(notchEnabled, forKey: "notchEnabled") }
+    }
+    /// Desktop-widget opacity (0.3…1.0). Applied to the floating panel.
+    @Published var widgetOpacity: Double {
+        didSet { defaults.set(widgetOpacity, forKey: "widgetOpacity") }
+    }
 
     init() {
         // Default the widget ON for first launch (no stored value yet).
@@ -131,6 +140,12 @@ final class SettingsStore: ObservableObject {
         hoverStyle = HoverStyle(rawValue: defaults.string(forKey: "hoverStyle") ?? "")
             ?? .solidBlack
         screenSaverEnabled = defaults.bool(forKey: "screenSaverEnabled")
+        // Notch defaults ON; only off if the user explicitly disabled it.
+        notchEnabled = defaults.object(forKey: "notchEnabled") == nil
+            ? true
+            : defaults.bool(forKey: "notchEnabled")
+        let storedOpacity = defaults.object(forKey: "widgetOpacity") as? Double ?? 1.0
+        widgetOpacity = min(max(storedOpacity, 0.3), 1.0)
     }
 }
 

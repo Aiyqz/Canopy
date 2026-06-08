@@ -91,6 +91,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         menu.addItem(.separator())
 
+        // Show the notch island at all.
+        let notchToggle = NSMenuItem(
+            title: "Show Notch Island",
+            action: #selector(toggleNotch),
+            keyEquivalent: ""
+        )
+        notchToggle.target = self
+        notchToggle.state = settings.notchEnabled ? .on : .off
+        menu.addItem(notchToggle)
+
         // Notch size (Small / Medium / Large).
         let sizeItem = NSMenuItem(title: "Notch Size", action: nil, keyEquivalent: "")
         let sizeMenu = NSMenu()
@@ -210,6 +220,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard let raw = sender.representedObject as? String,
               let style = HoverStyle(rawValue: raw) else { return }
         settings.hoverStyle = style
+        rebuildMenu()
+    }
+
+    @objc private func toggleNotch() {
+        settings.notchEnabled.toggle()
         rebuildMenu()
     }
 

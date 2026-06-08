@@ -24,6 +24,11 @@ final class WidgetController {
             .sink { [weak self] preset in self?.apply(preset: preset) }
             .store(in: &cancellables)
 
+        settings.$widgetOpacity
+            .receive(on: RunLoop.main)
+            .sink { [weak self] opacity in self?.window?.alphaValue = opacity }
+            .store(in: &cancellables)
+
         apply(visible: settings.widgetVisible)
     }
 
@@ -45,6 +50,7 @@ final class WidgetController {
         let preset = settings.preset
         let window = self.window ?? makeWindow(preset: preset)
         self.window = window
+        window.alphaValue = settings.widgetOpacity
         rebuildContent(preset: preset)
         resize(to: preset, window: window)
         window.orderFront(nil)

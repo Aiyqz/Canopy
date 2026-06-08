@@ -66,7 +66,9 @@ final class NotchController {
         rebuildRootView()
         recomputeSizes()
         position(for: collapsedSize)
-        window.orderFrontRegardless()
+        if settings.notchEnabled {
+            window.orderFrontRegardless()
+        }
 
         NotificationCenter.default.addObserver(
             self,
@@ -81,6 +83,25 @@ final class NotchController {
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.applySizeChange() }
             .store(in: &cancellables)
+
+        // Show/hide the whole island when the user toggles it.
+        settings.$notchEnabled
+            .dropFirst()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] enabled in self?.applyEnabled(enabled) }
+            .store(in: &cancellables)
+    }
+
+    private func applyEnabled(_ enabled: Bool) {
+        if enabled {
+            collapseWork?.cancel()
+            presentation = .collapsed
+            position(for: collapsedSize)
+            window.orderFrontRegardless()
+        } else {
+            collapseWork?.cancel()
+            window.orderOut(nil)
+        }
     }
 
     deinit {

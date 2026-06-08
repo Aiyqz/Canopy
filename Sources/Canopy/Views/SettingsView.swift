@@ -22,6 +22,7 @@ struct SettingsView: View {
                 header
 
                 section("Notch") {
+                    Toggle("Show the notch island", isOn: $settings.notchEnabled)
                     labeledRow("Size") {
                         Picker("", selection: $settings.notchSize) {
                             ForEach(NotchSize.allCases) { Text($0.title).tag($0) }
@@ -30,6 +31,7 @@ struct SettingsView: View {
                         .labelsHidden()
                         .frame(width: 240)
                     }
+                    .disabled(!settings.notchEnabled)
                     labeledRow("Hover look") {
                         Picker("", selection: $settings.hoverStyle) {
                             ForEach(HoverStyle.allCases) { Text($0.title).tag($0) }
@@ -38,8 +40,10 @@ struct SettingsView: View {
                         .labelsHidden()
                         .frame(width: 240)
                     }
+                    .disabled(!settings.notchEnabled)
                     NotchPreview(style: settings.hoverStyle, size: settings.notchSize)
                         .padding(.top, 4)
+                        .opacity(settings.notchEnabled ? 1 : 0.4)
                 }
 
                 section("Desktop Widget") {
@@ -51,6 +55,11 @@ struct SettingsView: View {
                         .labelsHidden()
                         .frame(width: 200)
                         .disabled(!settings.widgetVisible)
+                    }
+                    labeledRow("Opacity") {
+                        Slider(value: $settings.widgetOpacity, in: 0.3...1.0)
+                            .frame(width: 200)
+                            .disabled(!settings.widgetVisible)
                     }
                 }
 
