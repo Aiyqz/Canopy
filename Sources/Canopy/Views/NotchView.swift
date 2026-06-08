@@ -54,32 +54,7 @@ struct NotchView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(
-            ZStack {
-                // Always solid black so the island reads as an extension of the
-                // physical notch.
-                NotchShape().fill(.black)
-                if isOpen, settings.hoverStyle == .subtleGradient {
-                    // A faint light sheen over the black — still dark, just a hint
-                    // of dimension. (Not the album-color tint, which floated.)
-                    NotchShape()
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color.white.opacity(0.14),
-                                    Color.white.opacity(0.03),
-                                    Color.clear
-                                ],
-                                startPoint: .top, endPoint: .bottom
-                            )
-                        )
-                }
-            }
-            .shadow(color: .black.opacity(isOpen ? 0.5 : 0), radius: 20, y: 10)
-        )
-        .overlay(
-            NotchShape().stroke(Color.white.opacity(isOpen ? 0.10 : 0), lineWidth: 0.5)
-        )
+        .background(notchBackground)
         .overlay(dropHint)
         .contentShape(NotchShape())
         .onHover { hovering = $0; onPresent(presentation) }
@@ -98,6 +73,71 @@ struct NotchView: View {
         // the box and its content move as a single seamless animation.
         .animation(reduceMotion ? nil : .easeOut(duration: NotchController.openDuration),
                    value: presentation)
+    }
+
+    // MARK: Liquid Glass material
+
+    /// The island's material. On macOS 26+ this is Apple's native Liquid Glass
+    /// (real refraction, specular edges, depth, interactive response); older
+    /// systems get a hand-built dark frosted-glass approximation. A drop shadow
+    /// seats it above the desktop so it reads as a floating pane of glass.
+    @ViewBuilder private var notchBackground: some View {
+        Group {
+            if #available(macOS 26.0, *) {
+                liquidGlass
+            } else {
+                legacyGlass
+            }
+        }
+        .shadow(color: .black.opacity(isOpen ? 0.5 : 0.3),
+                radius: isOpen ? 24 : 11, y: isOpen ? 13 : 5)
+    }
+
+    /// "Subtle Gradient" hover style reads as clearer glass; "Solid Black" as a
+    /// darker, more notch-like smoked glass.
+    private var glassIsClear: Bool { settings.hoverStyle == .subtleGradient }
+    private var glassTintOpacity: Double {
+        isOpen ? (glassIsClear ? 0.4 : 0.52) : 0.62
+    }
+
+    @available(macOS 26.0, *)
+    private var liquidGlass: some View {
+        Color.clear
+            .glassEffect(
+                .regular
+                    .tint(.black.opacity(glassTintOpacity))
+                    .interactive(),
+                in: NotchShape()
+            )
+            .overlay(specularRim)
+    }
+
+    private var legacyGlass: some View {
+        ZStack {
+            VisualEffectView(material: .hudWindow, blending: .behindWindow)
+            // Deepen so white content stays legible and it reads as smoked glass.
+            Color.black.opacity(glassTintOpacity)
+            // Soft top sheen for dimension.
+            LinearGradient(colors: [.white.opacity(0.12), .clear],
+                           startPoint: .top, endPoint: .center)
+        }
+        .clipShape(NotchShape())
+        .overlay(specularRim)
+    }
+
+    /// A crisp light highlight catching the top rim, fading toward the bottom —
+    /// the glassy 3-D edge. Additive so it glints rather than washes the surface.
+    private var specularRim: some View {
+        NotchShape()
+            .stroke(
+                LinearGradient(
+                    colors: [.white.opacity(0.6), .white.opacity(0.14),
+                             .clear, .white.opacity(0.07)],
+                    startPoint: .top, endPoint: .bottom
+                ),
+                lineWidth: 0.8
+            )
+            .blendMode(.plusLighter)
     }
 
     private var dropBinding: Binding<Bool> {
