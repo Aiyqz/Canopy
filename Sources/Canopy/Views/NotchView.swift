@@ -169,6 +169,7 @@ struct BannerView: View {
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(.white)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.85)
                 if let secondary = banner.subtitle ?? banner.body, !secondary.isEmpty {
                     Text(secondary)
                         .font(.system(size: 11))
@@ -221,19 +222,21 @@ struct ExpandedPanel: View {
     var body: some View {
         VStack(spacing: s(10)) {
             HStack(spacing: s(12)) {
-                Artwork(image: vm.artwork, size: s(52), corner: s(10))
-                VStack(alignment: .leading, spacing: 3) {
+                Artwork(image: vm.artwork, size: s(54), corner: s(11))
+                VStack(alignment: .leading, spacing: s(3)) {
                     Text(vm.hasMedia ? vm.title : "Nothing Playing")
-                        .font(.system(size: s(13), weight: .semibold))
+                        .font(.system(size: s(14), weight: .semibold))
                         .foregroundStyle(.white)
                         .lineLimit(1)
+                        .minimumScaleFactor(0.85)   // shrink-to-fit before truncating
                     Text(vm.hasMedia ? vm.artist : "Canopy")
-                        .font(.system(size: s(11)))
-                        .foregroundStyle(.white.opacity(0.6))
+                        .font(.system(size: s(11.5)))
+                        .foregroundStyle(.white.opacity(0.65))
                         .lineLimit(1)
+                        .minimumScaleFactor(0.9)
                 }
-                Spacer(minLength: 0)
-                EqualizerBars(active: vm.isPlaying, color: .white.opacity(0.85))
+                Spacer(minLength: s(8))
+                EqualizerBars(active: vm.isPlaying, color: .white.opacity(0.9))
             }
 
             if let lyric = vm.currentLyric {
