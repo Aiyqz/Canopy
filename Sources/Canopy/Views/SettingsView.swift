@@ -23,6 +23,7 @@ struct SettingsView: View {
 
                 section("Notch") {
                     Toggle("Show the notch island", isOn: $settings.notchEnabled)
+                        .help("Turn off to run Canopy as a menu-bar + desktop-widget app with no floating island.")
                     labeledRow("Size") {
                         Picker("", selection: $settings.notchSize) {
                             ForEach(NotchSize.allCases) { Text($0.title).tag($0) }
@@ -60,6 +61,7 @@ struct SettingsView: View {
                         Slider(value: $settings.widgetOpacity, in: 0.3...1.0)
                             .frame(width: 200)
                             .disabled(!settings.widgetVisible)
+                            .help("How see-through the desktop widget is.")
                     }
                 }
 

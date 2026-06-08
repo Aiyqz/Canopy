@@ -233,7 +233,12 @@ final class MediaController {
                 guard let self, self.backend == .adapter else { return }
                 NSLog("Canopy: adapter stream exited (status \(status)); restarting")
                 // The stream is meant to run forever; relaunch unless we've stopped.
-                if self.streamProcess === proc {
+                // A 1s backoff keeps a crash-on-launch from busy-looping process
+                // spawns. The `=== proc` guards ensure we only relaunch this stream
+                // (not one a newer call already replaced).
+                guard self.streamProcess === proc else { return }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                    guard self.backend == .adapter, self.streamProcess === proc else { return }
                     self.startAdapterStream(script: script, framework: framework)
                 }
             }

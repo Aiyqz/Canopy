@@ -191,6 +191,11 @@ final class NowPlayingModel: ObservableObject {
 
     func pushBanner(_ banner: NotchBanner) {
         bannerQueue.append(banner)
+        // A notification burst shouldn't queue minutes of banners — keep the
+        // newest few and drop the backlog.
+        if bannerQueue.count > 6 {
+            bannerQueue.removeFirst(bannerQueue.count - 6)
+        }
         if currentBanner == nil { showNextBanner() }
     }
 
