@@ -30,5 +30,9 @@ struct Artwork: View {
             RoundedRectangle(cornerRadius: corner, style: .continuous)
                 .strokeBorder(.white.opacity(0.08), lineWidth: 0.5)
         )
+        // Lift the art off the glass so it reads as a card sitting above the
+        // pane rather than printed on it. Scales with the art so the tiny
+        // collapsed thumbnail gets only a whisper of shadow.
+        .shadow(color: .black.opacity(0.28), radius: size * 0.06, y: size * 0.02)
     }
 }

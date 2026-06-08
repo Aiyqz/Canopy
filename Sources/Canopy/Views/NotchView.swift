@@ -381,6 +381,13 @@ struct ScrubBar: View {
                         Capsule()
                             .fill(LinearGradient(colors: fillColors, startPoint: .leading, endPoint: .trailing))
                             .frame(width: geo.size.width * frac, height: dragging ? 6 : 4)
+                        // Tactile handle riding the playhead — swells while scrubbing.
+                        Circle()
+                            .fill(.white)
+                            .frame(width: dragging ? 13 : 9, height: dragging ? 13 : 9)
+                            .shadow(color: .black.opacity(0.35), radius: 2, y: 0.5)
+                            .offset(x: geo.size.width * frac - (dragging ? 6.5 : 4.5))
+                            .opacity(vm.hasMedia ? 1 : 0)
                     }
                     .frame(height: 16, alignment: .center)
                     .contentShape(Rectangle())
