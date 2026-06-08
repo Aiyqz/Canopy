@@ -12,7 +12,9 @@ concurrency:
 jobs:
   build:
     name: Build (macOS)
-    runs-on: macos-14
+    # macos-15 ships Xcode 16, which can read the project format XcodeGen emits
+    # (Xcode 15.4 on macos-14 cannot) and still satisfies `swift build`.
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
 
