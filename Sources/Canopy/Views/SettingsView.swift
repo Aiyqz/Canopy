@@ -42,7 +42,7 @@ struct SettingsView: View {
                         .padding(.top, 4)
                 }
 
-                section("Lockscreen Widget") {
+                section("Desktop Widget") {
                     Toggle("Show widget on the desktop", isOn: $settings.widgetVisible)
                     labeledRow("Style") {
                         Picker("", selection: $settings.preset) {
@@ -115,6 +115,14 @@ struct SettingsView: View {
                         Button("Quit Canopy", role: .destructive) { onQuit() }
                     }
                 }
+
+                HStack {
+                    Spacer()
+                    Text("Canopy \(Self.appVersion)")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                    Spacer()
+                }
             }
             .padding(22)
         }
@@ -124,6 +132,13 @@ struct SettingsView: View {
             launchAtLogin = LaunchAtLogin.isEnabled
             mirrorText = mirrorStatus()
         }
+    }
+
+    private static var appVersion: String {
+        let info = Bundle.main.infoDictionary
+        let short = info?["CFBundleShortVersionString"] as? String ?? "1.0"
+        let build = info?["CFBundleVersion"] as? String ?? "1"
+        return "v\(short) (\(build))"
     }
 
     private func openScreenRecording() {

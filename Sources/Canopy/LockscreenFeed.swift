@@ -15,6 +15,9 @@ final class LockscreenFeed {
     private let settings: SettingsStore
     private var timer: Timer?
     private var cancellables: Set<AnyCancellable> = []
+    /// Last PNG written, so a static card (e.g. paused on an art-only preset)
+    /// doesn't rewrite the same bytes to disk every second.
+    private var lastFramePNG: Data?
 
     init(model: NowPlayingModel, settings: SettingsStore) {
         self.model = model
@@ -55,7 +58,13 @@ final class LockscreenFeed {
               let bitmap = NSBitmapImageRep(data: tiff),
               let png = bitmap.representation(using: .png, properties: [:]) else { return }
 
-        try? png.write(to: CanopyShared.frameURL, options: .atomic)
+        // Only touch the (larger) PNG when the frame actually changed; the status
+        // JSON below is tiny and always refreshed so the saver can tell the app is
+        // still alive (vs. quit) regardless.
+        if png != lastFramePNG {
+            lastFramePNG = png
+            try? png.write(to: CanopyShared.frameURL, options: .atomic)
+        }
 
         let status = CanopyShareStatus(
             updated: Date(),

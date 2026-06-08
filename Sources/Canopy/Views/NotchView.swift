@@ -242,9 +242,10 @@ struct ExpandedPanel: View {
             ScrubBar(vm: vm, accent: accent)
 
             HStack(spacing: s(28)) {
-                ControlButton(system: "backward.fill", size: s(16)) { vm.previous() }
-                ControlButton(system: vm.isPlaying ? "pause.fill" : "play.fill", size: s(22)) { vm.togglePlayPause() }
-                ControlButton(system: "forward.fill", size: s(16)) { vm.next() }
+                ControlButton(system: "backward.fill", size: s(16), label: "Previous track") { vm.previous() }
+                ControlButton(system: vm.isPlaying ? "pause.fill" : "play.fill", size: s(22),
+                              label: vm.isPlaying ? "Pause" : "Play") { vm.togglePlayPause() }
+                ControlButton(system: "forward.fill", size: s(16), label: "Next track") { vm.next() }
             }
             .disabled(!vm.hasMedia)
             .opacity(vm.hasMedia ? 1 : 0.4)
@@ -307,6 +308,9 @@ struct ScrubBar: View {
                                 dragging = false
                             }
                     )
+                    .accessibilityElement()
+                    .accessibilityLabel("Playback position")
+                    .accessibilityValue(Text("\(Int(frac * 100)) percent"))
                 }
                 .frame(height: 16)
 
@@ -392,6 +396,7 @@ struct FileChip: View {
 private struct ControlButton: View {
     var system: String
     var size: CGFloat
+    var label: String
     var action: () -> Void
 
     @State private var hovering = false
@@ -406,6 +411,7 @@ private struct ControlButton: View {
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(label)
         .onHover { hovering = $0 }
     }
 }

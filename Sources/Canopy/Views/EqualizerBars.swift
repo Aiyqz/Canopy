@@ -17,6 +17,7 @@ struct EqualizerBars: View {
         let live = audio.levels
         let useReal = active && live.count == bars
 
+        // Decorative: keep VoiceOver focused on the track + transport controls.
         Group {
             if useReal {
                 HStack(alignment: .center, spacing: 2.5) {
@@ -32,6 +33,7 @@ struct EqualizerBars: View {
                 stylized
             }
         }
+        .accessibilityHidden(true)
     }
 
     private var stylized: some View {

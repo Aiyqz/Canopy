@@ -32,6 +32,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         setUpStatusItem()
     }
 
+    func applicationWillTerminate(_ notification: Notification) {
+        mirror.stop()
+        model.stop()
+    }
+
     private func setUpStatusItem() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         item.button?.image = NSImage(
@@ -64,7 +69,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(.separator())
 
         let widgetToggle = NSMenuItem(
-            title: "Show Lockscreen Widget",
+            title: "Show Desktop Widget",
             action: #selector(toggleWidget),
             keyEquivalent: "l"
         )

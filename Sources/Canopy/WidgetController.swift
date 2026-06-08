@@ -68,8 +68,11 @@ final class WidgetController {
         panel.hasShadow = false
         panel.isMovableByWindowBackground = true
 
-        // Place near the top-right of the main screen on first launch.
-        if let screen = NSScreen.main {
+        // Remember where the user dragged the widget across launches. On first run
+        // there's nothing to restore, so place it near the top-right of the screen.
+        let restored = panel.setFrameUsingName("CanopyWidget")
+        panel.setFrameAutosaveName("CanopyWidget")
+        if !restored, let screen = NSScreen.main {
             let v = screen.visibleFrame
             let origin = NSPoint(x: v.maxX - size.width - 40, y: v.maxY - size.height - 40)
             panel.setFrameOrigin(origin)

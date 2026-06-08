@@ -116,10 +116,21 @@ struct ClockView: View {
     var emphasizeSeconds = false
 
     private static let timeFmt: DateFormatter = {
-        let f = DateFormatter(); f.dateFormat = "h:mm"; return f
+        let f = DateFormatter()
+        f.locale = .current
+        // Honour the user's 12/24-hour preference, but keep the big clock clean
+        // (no AM/PM), matching the iOS lock screen.
+        let uses24h = !(DateFormatter.dateFormat(fromTemplate: "j", options: 0, locale: .current)?
+            .contains("a") ?? false)
+        f.dateFormat = uses24h ? "H:mm" : "h:mm"
+        return f
     }()
     private static let dateFmt: DateFormatter = {
-        let f = DateFormatter(); f.dateFormat = "EEEE, MMMM d"; return f
+        let f = DateFormatter()
+        f.locale = .current
+        // Localized weekday + month order (e.g. "Monday, June 8" / "lundi 8 juin").
+        f.setLocalizedDateFormatFromTemplate("EEEEMMMMd")
+        return f
     }()
 
     var body: some View {
@@ -197,15 +208,17 @@ struct TransportControls: View {
 
     var body: some View {
         HStack(spacing: compact ? 30 : 40) {
-            glyph("backward.fill", small) { vm.previous() }
-            glyph(vm.isPlaying ? "pause.fill" : "play.fill", big) { vm.togglePlayPause() }
-            glyph("forward.fill", small) { vm.next() }
+            glyph("backward.fill", small, "Previous track") { vm.previous() }
+            glyph(vm.isPlaying ? "pause.fill" : "play.fill", big,
+                  vm.isPlaying ? "Pause" : "Play") { vm.togglePlayPause() }
+            glyph("forward.fill", small, "Next track") { vm.next() }
         }
         .disabled(!vm.hasMedia)
         .opacity(vm.hasMedia ? 1 : 0.4)
     }
 
-    private func glyph(_ name: String, _ size: CGFloat, _ action: @escaping () -> Void) -> some View {
+    private func glyph(_ name: String, _ size: CGFloat, _ label: String,
+                       _ action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: name)
                 .font(.system(size: size, weight: .medium))
@@ -213,6 +226,7 @@ struct TransportControls: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(label)
     }
 }
 

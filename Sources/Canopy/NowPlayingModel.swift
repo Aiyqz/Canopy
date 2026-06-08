@@ -71,8 +71,22 @@ final class NowPlayingModel: ObservableObject {
         }
     }
 
+    /// Tear down timers and the media backend (called on app termination).
+    func stop() {
+        ticker?.invalidate()
+        ticker = nil
+        controller.stop()
+        AudioLevelMonitor.shared.setEnabled(false)
+    }
+
     private func tick() {
-        elapsed = liveElapsed()
+        // While paused the projection is constant, so there's nothing to advance —
+        // and reassigning `elapsed` would needlessly churn every observer (the
+        // notch + widget) twice a second. The scrubber/clock animate via their own
+        // TimelineViews, so this tick only exists to advance lyrics during playback.
+        guard isPlaying else { return }
+        let live = liveElapsed()
+        if abs(live - elapsed) > 0.01 { elapsed = live }
         updateLyricIndex()
     }
 
