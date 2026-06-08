@@ -123,13 +123,21 @@ final class NotchController {
         position(for: collapsedSize)
     }
 
+    /// Space to keep the expanded content clear of the physical camera notch (so
+    /// titles are never drawn under it). On non-notch displays there's no camera,
+    /// so only a small breathing margin is reserved.
+    private var contentTopInset: CGFloat {
+        screen.safeAreaInsets.top > 0 ? metrics.notchHeight + 4 : 8
+    }
+
     private func rebuildRootView() {
         hosting.rootView = NotchView(
             vm: model,
             settings: settings,
             metrics: metrics,
             onPresent: { [weak self] presentation in self?.present(presentation) },
-            onExpandedHeight: { [weak self] height in self?.setExpandedContentHeight(height) }
+            onExpandedHeight: { [weak self] height in self?.setExpandedContentHeight(height) },
+            topInset: contentTopInset
         )
     }
 
@@ -150,7 +158,7 @@ final class NotchController {
         )
         bannerSize = CGSize(
             width: max(metrics.notchWidth + size.extraWidth - 40, size.minWidth - 20),
-            height: size.bannerHeight
+            height: size.bannerHeight + contentTopInset
         )
     }
 
@@ -203,13 +211,20 @@ final class NotchController {
             window.setFrame(frame, display: true)
             return
         }
+        // Must match the SwiftUI content animation (NotchController.openTiming /
+        // NotchView) exactly, or the window and its content settle at different
+        // times and read as two separate animations.
         NSAnimationContext.runAnimationGroup { ctx in
-            ctx.duration = 0.34
+            ctx.duration = NotchController.openDuration
             ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
             ctx.allowsImplicitAnimation = true
             window.animator().setFrame(frame, display: true)
         }
     }
+
+    /// Shared open/close duration for both the AppKit window resize and the
+    /// SwiftUI content morph (see NotchView), so they move as one.
+    static let openDuration: CFTimeInterval = 0.32
 
     private func position(for size: CGSize) {
         window.setFrame(frame(for: size), display: true)

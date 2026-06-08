@@ -18,6 +18,8 @@ struct NotchView: View {
     let metrics: NotchMetrics
     let onPresent: (NotchPresentation) -> Void
     var onExpandedHeight: (CGFloat) -> Void = { _ in }
+    /// Keeps content clear of the physical camera notch.
+    var topInset: CGFloat = 8
 
     @State private var hovering = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -34,17 +36,17 @@ struct NotchView: View {
         ZStack(alignment: .top) {
             switch presentation {
             case .expanded:
-                ExpandedPanel(vm: vm, scale: settings.notchSize.contentScale)
+                ExpandedPanel(vm: vm, scale: settings.notchSize.contentScale, topInset: topInset)
                     .background(
                         GeometryReader { proxy in
                             Color.clear.preference(key: ExpandedHeightKey.self, value: proxy.size.height)
                         }
                     )
-                    .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .top)))
+                    .transition(.opacity)
             case .banner:
                 if let banner = vm.currentBanner {
-                    BannerView(banner: banner)
-                        .transition(.opacity.combined(with: .move(edge: .top)))
+                    BannerView(banner: banner, topInset: topInset)
+                        .transition(.opacity)
                 }
             case .collapsed:
                 CollapsedPill(vm: vm, metrics: metrics)
@@ -92,7 +94,9 @@ struct NotchView: View {
         .onPreferenceChange(ExpandedHeightKey.self) { height in
             if height > 1 { onExpandedHeight(height) }
         }
-        .animation(reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.82),
+        // Same curve + duration as the AppKit window resize (NotchController), so
+        // the box and its content move as a single seamless animation.
+        .animation(reduceMotion ? nil : .easeOut(duration: NotchController.openDuration),
                    value: presentation)
     }
 
@@ -155,6 +159,7 @@ struct CollapsedPill: View {
 
 struct BannerView: View {
     let banner: NotchBanner
+    var topInset: CGFloat = 8
 
     var body: some View {
         HStack(spacing: 12) {
@@ -177,7 +182,8 @@ struct BannerView: View {
             }
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.top, topInset)
+        .padding(.bottom, 12)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
@@ -206,6 +212,8 @@ struct BannerView: View {
 struct ExpandedPanel: View {
     @ObservedObject var vm: NowPlayingModel
     var scale: CGFloat = 1
+    /// Top space reserved so the title row clears the physical camera notch.
+    var topInset: CGFloat = 8
 
     private var accent: Color { vm.palette.first ?? .white }
     private func s(_ x: CGFloat) -> CGFloat { x * scale }
@@ -261,7 +269,7 @@ struct ExpandedPanel: View {
             }
         }
         .padding(.horizontal, s(18))
-        .padding(.top, s(14))
+        .padding(.top, topInset + s(6))
         .padding(.bottom, s(12))
         .frame(maxWidth: .infinity, alignment: .top)
     }

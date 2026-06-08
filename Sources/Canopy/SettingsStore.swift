@@ -127,12 +127,8 @@ final class SettingsStore: ObservableObject {
     }
 
     init() {
-        // Default the widget ON for first launch (no stored value yet).
-        if defaults.object(forKey: "widgetVisible") == nil {
-            widgetVisible = true
-        } else {
-            widgetVisible = defaults.bool(forKey: "widgetVisible")
-        }
+        // The desktop widget is opt-in (the notch is the primary surface).
+        widgetVisible = defaults.bool(forKey: "widgetVisible")
         preset = WidgetPreset(rawValue: defaults.string(forKey: "widgetPreset") ?? "")
             ?? .lockscreen
         notchSize = NotchSize(rawValue: defaults.string(forKey: "notchSize") ?? "")

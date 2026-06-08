@@ -183,12 +183,15 @@ final class AudioLevelMonitor: NSObject, ObservableObject, SCStreamDelegate, SCS
             let config = SCStreamConfiguration()
             config.capturesAudio = true
             config.sampleRate = 48_000
-            config.channelCount = 2
-            // Minimal video — we only want the audio tap.
-            config.width = 160
-            config.height = 90
+            config.channelCount = 1   // mono is all the analyzer needs
+            // We only want the audio tap, so make the (mandatory) video stream as
+            // cheap as possible: 2×2 px at the lowest frame rate. This keeps the
+            // capture session light on battery.
+            config.width = 2
+            config.height = 2
             config.minimumFrameInterval = CMTime(value: 1, timescale: 1)
-            config.queueDepth = 3
+            config.queueDepth = 2
+            config.excludesCurrentProcessAudio = true
 
             let stream = SCStream(filter: filter, configuration: config, delegate: self)
             try stream.addStreamOutput(self, type: .audio, sampleHandlerQueue: sampleQueue)
