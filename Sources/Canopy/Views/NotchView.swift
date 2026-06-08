@@ -23,6 +23,7 @@ struct NotchView: View {
 
     @State private var hovering = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     private var presentation: NotchPresentation {
         if hovering || vm.shelfPinned { return .expanded }
@@ -83,7 +84,9 @@ struct NotchView: View {
     /// seats it above the desktop so it reads as a floating pane of glass.
     @ViewBuilder private var notchBackground: some View {
         Group {
-            if #available(macOS 26.0, *) {
+            if reduceTransparency {
+                solidGlass               // opaque + legible for the a11y setting
+            } else if #available(macOS 26.0, *) {
                 liquidGlass
             } else {
                 legacyGlass
@@ -91,6 +94,13 @@ struct NotchView: View {
         }
         .shadow(color: .black.opacity(isOpen ? 0.5 : 0.3),
                 radius: isOpen ? 24 : 11, y: isOpen ? 13 : 5)
+    }
+
+    /// Opaque material honoring the Reduce Transparency accessibility setting.
+    private var solidGlass: some View {
+        NotchShape()
+            .fill(Color(white: 0.06))
+            .overlay(specularRim)
     }
 
     /// "Subtle Gradient" hover style reads as clearer glass; "Solid Black" as a
