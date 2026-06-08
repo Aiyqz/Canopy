@@ -234,6 +234,7 @@ struct TransportControls: View {
 
 struct LyricsColumn: View {
     @ObservedObject var vm: NowPlayingModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         GeometryReader { _ in
@@ -259,7 +260,8 @@ struct LyricsColumn: View {
                             }
                             .buttonStyle(.plain)
                             .id(idx)
-                            .animation(.easeInOut(duration: 0.25), value: vm.currentLyricIndex)
+                            .animation(reduceMotion ? nil : .easeInOut(duration: 0.25),
+                                       value: vm.currentLyricIndex)
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -268,7 +270,7 @@ struct LyricsColumn: View {
                 }
                 .onChange(of: vm.currentLyricIndex) { _, new in
                     guard let new else { return }
-                    withAnimation(.easeInOut(duration: 0.4)) {
+                    withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.4)) {
                         proxy.scrollTo(new, anchor: .center)
                     }
                 }
