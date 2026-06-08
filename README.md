@@ -8,11 +8,12 @@ A refined, productivity-focused **Dynamic Island experience for macOS** — a na
 
 - **Notch media player** — a black slab that hugs the notch and expands on hover into a full player: artwork, title/artist, animated EQ bars, a **scrubbable** progress bar, and play / prev / next. Reads & controls whatever is playing system-wide via the bundled [mediaremote-adapter](https://github.com/ungive/mediaremote-adapter) (works on macOS 15.4+, where direct `MediaRemote` access is otherwise blocked), with automatic fallback to the in-process `MediaRemote` bridge and then to AppleScript control of Music / Spotify.
 - **Time-synced lyrics** — fetched from [LRCLIB](https://lrclib.net) (free, no API key), parsed from LRC, and tracked against playback. Shown in the notch and the widget with **Apple-Music-style color gradients** sampled from the album art. **Tap a line to seek.**
-- **Liquid Glass widget** — a frosted-glass **desktop** widget (behind-window blur + album-art gradient) with **4 presets**: Lockscreen-style (iOS clock + now-playing card), Now Playing (art-forward), Lyrics (scrolling synced), and Minimal Clock.
+- **Liquid Glass widget** — a frosted-glass **desktop** widget (behind-window blur + album-art gradient) with **4 presets**: Lockscreen-style (iOS clock + now-playing card), Now Playing (art-forward), Lyrics (scrolling synced), and Minimal Clock. Drag it anywhere — it remembers where you put it. The clock follows your system 12/24-hour and locale settings.
 - **Screen saver** — the same now-playing card as a macOS screen saver, the closest thing macOS allows to a lock-screen widget (third-party apps can't draw on the real lock screen). See [Screen saver](#screen-saver).
 - **Notch banners** — now-playing changes and **mirrored system notifications** slide down from the notch. Mirroring tails the Notification Center database (requires Full Disk Access; degrades gracefully).
 - **File-drop shelf** — drop files onto the notch to stash them, then drag them back out, reveal in Finder, or clear.
 - **Menu-bar app** — no Dock icon. Toggle the widget, switch presets, enable Launch at Login, and grant access from the leaf menu.
+- **Accessible & efficient** — VoiceOver labels on the transport controls and scrubber; idle CPU stays low (the notch/widget stop re-rendering when nothing is playing, and the screen-saver feed only writes a new frame when the card actually changes).
 
 ## Requirements
 
