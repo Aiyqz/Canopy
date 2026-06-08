@@ -12,6 +12,7 @@ enum LyricsService {
     private struct Response: Decodable {
         let syncedLyrics: String?
         let plainLyrics: String?
+        let duration: Double?
     }
 
     static func fetchSynced(title: String, artist: String, album: String, duration: Double) async -> [LyricLine] {
@@ -34,7 +35,7 @@ enum LyricsService {
             let (data, response) = try await URLSession.shared.data(for: request)
             guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
                 // Fall back to the fuzzy /search endpoint if exact match misses.
-                return await searchSynced(title: title, artist: artist)
+                return await searchSynced(title: title, artist: artist, duration: duration)
             }
             let decoded = try JSONDecoder().decode(Response.self, from: data)
             if let lrc = decoded.syncedLyrics, !lrc.isEmpty {
@@ -46,7 +47,7 @@ enum LyricsService {
         }
     }
 
-    private static func searchSynced(title: String, artist: String) async -> [LyricLine] {
+    private static func searchSynced(title: String, artist: String, duration: Double) async -> [LyricLine] {
         var comps = URLComponents(string: "https://lrclib.net/api/search")
         comps?.queryItems = [
             URLQueryItem(name: "track_name", value: title),
@@ -59,8 +60,14 @@ enum LyricsService {
         do {
             let (data, _) = try await URLSession.shared.data(for: request)
             let results = try JSONDecoder().decode([Response].self, from: data)
-            if let first = results.first(where: { ($0.syncedLyrics ?? "").isEmpty == false }),
-               let lrc = first.syncedLyrics {
+            // Among results that actually have synced lyrics, prefer the one whose
+            // duration is closest to the track — guards against grabbing a different
+            // edit/version (live, remix, sped-up) with mismatched timestamps.
+            let synced = results.filter { !($0.syncedLyrics ?? "").isEmpty }
+            let best = duration > 0
+                ? synced.min { abs(($0.duration ?? 0) - duration) < abs(($1.duration ?? 0) - duration) }
+                : synced.first
+            if let lrc = best?.syncedLyrics {
                 return parseLRC(lrc)
             }
             return []
