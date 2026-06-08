@@ -22,6 +22,9 @@ struct NotchView: View {
     var topInset: CGFloat = 8
 
     @State private var hovering = false
+    /// Shared geometry space so the album art morphs as one element between the
+    /// collapsed pill and the expanded panel (no double-exposed cross-fade).
+    @Namespace private var morphNS
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
@@ -37,7 +40,8 @@ struct NotchView: View {
         ZStack(alignment: .top) {
             switch presentation {
             case .expanded:
-                ExpandedPanel(vm: vm, scale: settings.notchSize.contentScale, topInset: topInset)
+                ExpandedPanel(vm: vm, scale: settings.notchSize.contentScale, topInset: topInset,
+                              artNamespace: morphNS)
                     .background(
                         GeometryReader { proxy in
                             Color.clear.preference(key: ExpandedHeightKey.self, value: proxy.size.height)
@@ -50,7 +54,7 @@ struct NotchView: View {
                         .transition(.opacity)
                 }
             case .collapsed:
-                CollapsedPill(vm: vm, metrics: metrics)
+                CollapsedPill(vm: vm, metrics: metrics, artNamespace: morphNS)
                     .transition(.opacity)
             }
         }
@@ -219,16 +223,33 @@ struct NotchView: View {
     }
 }
 
+private extension View {
+    /// Ties the collapsed and expanded artwork into one matched element so the
+    /// island morphs a single image between sizes, instead of cross-fading two
+    /// overlapping copies (which double-exposes into a glitchy smear during the
+    /// open/close transition). A nil namespace (e.g. offscreen snapshots) is a
+    /// no-op.
+    @ViewBuilder func matchedArt(_ namespace: Namespace.ID?) -> some View {
+        if let namespace {
+            matchedGeometryEffect(id: "canopyArtwork", in: namespace)
+        } else {
+            self
+        }
+    }
+}
+
 // MARK: - Collapsed
 
 struct CollapsedPill: View {
     @ObservedObject var vm: NowPlayingModel
     let metrics: NotchMetrics
+    var artNamespace: Namespace.ID? = nil
 
     var body: some View {
         HStack(spacing: 0) {
             if vm.hasMedia {
                 Artwork(image: vm.artwork, size: metrics.notchHeight - 10, corner: 5)
+                    .matchedArt(artNamespace)
                     .padding(.leading, 8)
             }
             Spacer(minLength: metrics.notchWidth)
@@ -302,6 +323,7 @@ struct ExpandedPanel: View {
     var scale: CGFloat = 1
     /// Top space reserved so the title row clears the physical camera notch.
     var topInset: CGFloat = 8
+    var artNamespace: Namespace.ID? = nil
 
     private var accent: Color { vm.palette.first ?? .white }
     private func s(_ x: CGFloat) -> CGFloat { x * scale }
@@ -310,6 +332,7 @@ struct ExpandedPanel: View {
         VStack(spacing: s(10)) {
             HStack(spacing: s(12)) {
                 Artwork(image: vm.artwork, size: s(54), corner: s(11))
+                    .matchedArt(artNamespace)
                 VStack(alignment: .leading, spacing: s(3)) {
                     Text(vm.hasMedia ? vm.title : "Nothing Playing")
                         .font(.system(size: s(14), weight: .semibold))
