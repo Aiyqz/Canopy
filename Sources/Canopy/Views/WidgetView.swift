@@ -41,6 +41,7 @@ struct WidgetView: View {
         }
         .clipShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
         .overlay(glassEdge)
+        .overlay(depthBevel)
         .shadow(color: .black.opacity(0.35), radius: 30, y: 14)
         .padding(14) // room for the shadow inside the window
     }
@@ -90,5 +91,18 @@ struct WidgetView: View {
                 ),
                 lineWidth: 1
             )
+    }
+
+    /// Convex-lens depth to match the notch: a soft dark gather along the lower
+    /// inner edge, pairing with the top-lit `glassEdge`.
+    private var depthBevel: some View {
+        RoundedRectangle(cornerRadius: corner, style: .continuous)
+            .stroke(
+                LinearGradient(colors: [.clear, .clear, .black.opacity(0.22)],
+                               startPoint: .top, endPoint: .bottom),
+                lineWidth: 1.4
+            )
+            .blur(radius: 0.6)
+            .allowsHitTesting(false)
     }
 }
