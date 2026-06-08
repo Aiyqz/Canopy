@@ -20,6 +20,7 @@ struct NotchView: View {
     var onExpandedHeight: (CGFloat) -> Void = { _ in }
 
     @State private var hovering = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var presentation: NotchPresentation {
         if hovering || vm.shelfPinned { return .expanded }
@@ -91,7 +92,8 @@ struct NotchView: View {
         .onPreferenceChange(ExpandedHeightKey.self) { height in
             if height > 1 { onExpandedHeight(height) }
         }
-        .animation(.spring(response: 0.4, dampingFraction: 0.82), value: presentation)
+        .animation(reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.82),
+                   value: presentation)
     }
 
     private var dropBinding: Binding<Bool> {

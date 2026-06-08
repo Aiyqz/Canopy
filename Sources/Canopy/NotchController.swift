@@ -198,6 +198,11 @@ final class NotchController {
 
     private func animate(to size: CGSize) {
         let frame = frame(for: size)
+        // Respect the Accessibility "Reduce Motion" setting — snap instead of morph.
+        if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+            window.setFrame(frame, display: true)
+            return
+        }
         NSAnimationContext.runAnimationGroup { ctx in
             ctx.duration = 0.34
             ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)

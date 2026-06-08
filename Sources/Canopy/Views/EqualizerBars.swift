@@ -9,6 +9,7 @@ struct EqualizerBars: View {
     var color: Color = .white
 
     @ObservedObject private var audio = AudioLevelMonitor.shared
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let bars = 4
     private let heights: [CGFloat] = [0.4, 1.0, 0.6, 0.85]
@@ -37,8 +38,10 @@ struct EqualizerBars: View {
     }
 
     private var stylized: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: !active)) { context in
-            let phase = active ? context.date.timeIntervalSinceReferenceDate * 4 : 0
+        // Freeze the gratuitous wobble when Reduce Motion is on (real audio-driven
+        // bars above stay live — they convey actual information).
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: !active || reduceMotion)) { context in
+            let phase = (active && !reduceMotion) ? context.date.timeIntervalSinceReferenceDate * 4 : 0
             HStack(alignment: .center, spacing: 2.5) {
                 ForEach(0..<bars, id: \.self) { i in
                     Capsule()

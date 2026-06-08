@@ -28,6 +28,10 @@ struct WidgetView: View {
     /// When true, replaces the live blur with an opaque gradient (for offscreen snapshots).
     var snapshotMode = false
 
+    /// Honor the Accessibility "Reduce Transparency" setting by dropping the
+    /// behind-window blur for a solid backing.
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
     private let corner: CGFloat = 38
 
     var body: some View {
@@ -43,7 +47,7 @@ struct WidgetView: View {
 
     @ViewBuilder private var background: some View {
         ZStack {
-            if snapshotMode {
+            if snapshotMode || reduceTransparency {
                 LinearGradient(colors: [Color(white: 0.10), Color(white: 0.04)],
                                startPoint: .top, endPoint: .bottom)
             } else {
