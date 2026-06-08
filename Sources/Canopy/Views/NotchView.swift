@@ -104,18 +104,16 @@ struct NotchView: View {
     }
 
     /// "Subtle Gradient" hover style reads as clearer glass; "Solid Black" as a
-    /// darker, more notch-like smoked glass.
+    /// slightly darker smoked glass. Kept light so the Liquid Glass material
+    /// actually shows through (a heavy tint just looks like an opaque slab).
     private var glassIsClear: Bool { settings.hoverStyle == .subtleGradient }
-    private var glassTintOpacity: Double {
-        isOpen ? (glassIsClear ? 0.4 : 0.52) : 0.62
-    }
 
     @available(macOS 26.0, *)
     private var liquidGlass: some View {
         Color.clear
             .glassEffect(
                 .regular
-                    .tint(.black.opacity(glassTintOpacity))
+                    .tint(.black.opacity(glassIsClear ? 0.10 : 0.22))
                     .interactive(),
                 in: NotchShape()
             )
@@ -125,10 +123,11 @@ struct NotchView: View {
     private var legacyGlass: some View {
         ZStack {
             VisualEffectView(material: .hudWindow, blending: .behindWindow)
-            // Deepen so white content stays legible and it reads as smoked glass.
-            Color.black.opacity(glassTintOpacity)
+            // Deepen a touch so white content stays legible (the blur already
+            // darkens it); keep it translucent so it still reads as glass.
+            Color.black.opacity(isOpen ? 0.3 : 0.4)
             // Soft top sheen for dimension.
-            LinearGradient(colors: [.white.opacity(0.12), .clear],
+            LinearGradient(colors: [.white.opacity(0.14), .clear],
                            startPoint: .top, endPoint: .center)
         }
         .clipShape(NotchShape())
