@@ -10,7 +10,7 @@ import AppKit
 /// NSPrincipalClass can be just "CanopyScreenSaverView".
 @objc(CanopyScreenSaverView)
 final class CanopyScreenSaverView: ScreenSaverView {
-    private var frame: NSImage?
+    private var latestFrame: NSImage?
     private var background = NSColor(srgbRed: 0.043, green: 0.043, blue: 0.06, alpha: 1)
     private var lastModified: Date?
     private var lastFrameSeen: Date?
@@ -47,7 +47,7 @@ final class CanopyScreenSaverView: ScreenSaverView {
         lastModified = modified
 
         if let modified, let image = NSImage(contentsOf: url) {
-            frame = image
+            latestFrame = image
             lastFrameSeen = modified
         }
 
@@ -66,7 +66,7 @@ final class CanopyScreenSaverView: ScreenSaverView {
 
         // Treat a frame older than ~30s as stale (app quit / nothing playing).
         let fresh = lastFrameSeen.map { Date().timeIntervalSince($0) < 30 } ?? false
-        guard let image = frame, fresh else {
+        guard let image = latestFrame, fresh else {
             drawPlaceholder()
             return
         }
