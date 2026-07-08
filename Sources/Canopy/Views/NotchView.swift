@@ -102,20 +102,44 @@ struct CollapsedPill: View {
     @ObservedObject var vm: NowPlayingModel
     let metrics: NotchMetrics
 
+    private var accent: Color { vm.palette.first ?? .white }
+
     var body: some View {
-        HStack(spacing: 0) {
+        HStack(spacing: 6) {
             if vm.hasMedia {
                 Artwork(image: vm.artwork, size: metrics.notchHeight - 10, corner: 5)
                     .padding(.leading, 8)
             }
-            Spacer(minLength: metrics.notchWidth)
+
+            // 当前同步歌词直接显示在收起状态的小岛上（Dynamic Lyrics 风格）。
+            // 没有歌词时退回纯留白，保持灵动岛干净。
+            if let lyric = vm.currentLyric {
+                Text(lyric)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(
+                        LinearGradient(colors: lyricColors, startPoint: .leading, endPoint: .trailing)
+                    )
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .id(lyric)
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+            } else {
+                Spacer(minLength: 0)
+            }
+
             if vm.hasMedia {
                 EqualizerBars(active: vm.isPlaying)
-                    .padding(.trailing, 12)
+                    .padding(.trailing, 10)
             }
         }
         .frame(height: metrics.notchHeight)
         .frame(maxWidth: .infinity)
+    }
+
+    private var lyricColors: [Color] {
+        let p = vm.palette.map { $0.opacity(1) }
+        return p.count >= 2 ? Array(p.prefix(2)) : [.white, .white.opacity(0.8)]
     }
 }
 
