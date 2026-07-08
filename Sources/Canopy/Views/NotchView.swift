@@ -112,16 +112,20 @@ struct CollapsedPill: View {
             }
 
             // 当前同步歌词直接显示在收起状态的小岛上（Dynamic Lyrics 风格）。
-            // 没有歌词时退回纯留白，保持灵动岛干净。
+            // 居中、加大字号、白色高对比 + 阴影，确保看得清。
             if let lyric = vm.currentLyric {
                 Text(lyric)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(
-                        LinearGradient(colors: lyricColors, startPoint: .leading, endPoint: .trailing)
+                        LinearGradient(
+                            colors: [Color.white, Color.white.opacity(0.82)],
+                            startPoint: .leading, endPoint: .trailing
+                        )
                     )
+                    .shadow(color: .black.opacity(0.6), radius: 2, y: 1)
                     .lineLimit(1)
-                    .truncationMode(.tail)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .truncationMode(.middle)
+                    .frame(maxWidth: .infinity, alignment: .center)
                     .id(lyric)
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
             } else {
@@ -135,11 +139,6 @@ struct CollapsedPill: View {
         }
         .frame(height: metrics.notchHeight)
         .frame(maxWidth: .infinity)
-    }
-
-    private var lyricColors: [Color] {
-        let p = vm.palette.map { $0.opacity(1) }
-        return p.count >= 2 ? Array(p.prefix(2)) : [.white, .white.opacity(0.8)]
     }
 }
 
@@ -220,13 +219,17 @@ struct ExpandedPanel: View {
 
             if let lyric = vm.currentLyric {
                 Text(lyric)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(
-                        LinearGradient(colors: lyricColors, startPoint: .leading, endPoint: .trailing)
+                        LinearGradient(
+                            colors: [Color.white, Color.white.opacity(0.82)],
+                            startPoint: .leading, endPoint: .trailing
+                        )
                     )
+                    .shadow(color: .black.opacity(0.6), radius: 2, y: 1)
                     .lineLimit(1)
-                    .truncationMode(.tail)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .truncationMode(.middle)
+                    .frame(maxWidth: .infinity, alignment: .center)
                     .id(lyric)
                     .transition(.asymmetric(
                         insertion: .opacity.combined(with: .move(edge: .bottom)),
@@ -253,11 +256,6 @@ struct ExpandedPanel: View {
         .padding(.top, 14)
         .padding(.bottom, 12)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-    }
-
-    private var lyricColors: [Color] {
-        let p = vm.palette.map { $0.opacity(1) }
-        return p.count >= 2 ? Array(p.prefix(2)) : [.white, .white.opacity(0.8)]
     }
 }
 
