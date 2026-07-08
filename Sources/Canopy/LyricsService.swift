@@ -12,62 +12,112 @@ enum LyricsService {
     private struct Response: Decodable {
         let syncedLyrics: String?
         let plainLyrics: String?
+        let duration: Double?
     }
 
+    /// Public entry: returns time-synced lyric lines, or a plain-lyrics
+    /// fallback (evenly distributed across the track) if no synced version exists.
     static func fetchSynced(title: String, artist: String, album: String, duration: Double) async -> [LyricLine] {
         guard !title.isEmpty, !artist.isEmpty else { return [] }
 
+        // 1) Exact match via /api/get (no album — strict album match causes 404s).
+        if let lines = await requestGet(track: title, artist: artist, duration: duration), !lines.isEmpty {
+            return lines
+        }
+        // 2) Fuzzy /api/search — pick the entry whose duration is closest.
+        if let lines = await requestSearch(track: title, artist: artist, duration: duration), !lines.isEmpty {
+            return lines
+        }
+        return []
+    }
+
+    // MARK: - Network (写死路由器代理 + 重试 + 长超时)
+
+    // 写死路由器代理（ImmortalWrt，xray 监听所有接口）：
+    //   HTTP: 192.168.10.1:20171 / SOCKS5: 192.168.10.1:20170
+    // LRCLIB 服务器在海外，直连经常超时，走代理才能稳定拉到歌词。
+    private static let proxyHost = "192.168.10.1"
+    private static let proxyPortHTTP = 20171
+    private static let proxyPortSOCKS = 20170
+
+    private static let session: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.connectionProxyDictionary = [
+            "HTTPEnable": 1,
+            "HTTPProxy": proxyHost,
+            "HTTPPort": proxyPortHTTP,
+            "SOCKSEnable": 1,
+            "SOCKSProxy": proxyHost,
+            "SOCKSPort": proxyPortSOCKS,
+        ] as [String: Any]
+        config.timeoutIntervalForRequest = 20
+        config.timeoutIntervalForResource = 30
+        config.requestCachePolicy = .reloadIgnoringLocalCacheData
+        return URLSession(configuration: config)
+    }()
+
+    private static func fetchData(_ url: URL) async throws -> Data {
+        var lastErr: Error = URLError(.unknown)
+        for attempt in 0..<3 {
+            if attempt > 0 {
+                try? await Task.sleep(nanoseconds: UInt64(pow(2.0, Double(attempt))) * 500_000_000)
+            }
+            var req = URLRequest(url: url)
+            req.setValue("Canopy/1.0 (macOS notch app; github.com/canopy)", forHTTPHeaderField: "User-Agent")
+            req.timeoutInterval = 20
+            do {
+                let (data, resp) = try await session.data(for: req)
+                if let http = resp as? HTTPURLResponse, http.statusCode == 200 {
+                    return data
+                }
+                lastErr = URLError(.badServerResponse)
+            } catch {
+                lastErr = error
+            }
+        }
+        throw lastErr
+    }
+
+    private static func requestGet(track: String, artist: String, duration: Double) async -> [LyricLine]? {
         var comps = URLComponents(string: "https://lrclib.net/api/get")
         comps?.queryItems = [
-            URLQueryItem(name: "track_name", value: title),
+            URLQueryItem(name: "track_name", value: track),
             URLQueryItem(name: "artist_name", value: artist),
-            URLQueryItem(name: "album_name", value: album),
             URLQueryItem(name: "duration", value: String(Int(duration.rounded())))
         ]
-        guard let url = comps?.url else { return [] }
-
-        var request = URLRequest(url: url)
-        request.setValue("Canopy/1.0 (macOS notch app; github.com/canopy)", forHTTPHeaderField: "User-Agent")
-        request.timeoutInterval = 8
-
-        do {
-            let (data, response) = try await URLSession.shared.data(for: request)
-            guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-                // Fall back to the fuzzy /search endpoint if exact match misses.
-                return await searchSynced(title: title, artist: artist)
-            }
-            let decoded = try JSONDecoder().decode(Response.self, from: data)
-            if let lrc = decoded.syncedLyrics, !lrc.isEmpty {
-                return parseLRC(lrc)
-            }
-            return []
-        } catch {
-            return []
-        }
+        guard let url = comps?.url else { return nil }
+        guard let data = try? await fetchData(url) else { return nil }
+        guard let dec = try? JSONDecoder().decode(Response.self, from: data) else { return nil }
+        if let lrc = dec.syncedLyrics, !lrc.isEmpty { return parseLRC(lrc) }
+        if let plain = dec.plainLyrics, !plain.isEmpty { return parsePlain(plain, duration: duration) }
+        return nil
     }
 
-    private static func searchSynced(title: String, artist: String) async -> [LyricLine] {
+    private static func requestSearch(track: String, artist: String, duration: Double) async -> [LyricLine]? {
         var comps = URLComponents(string: "https://lrclib.net/api/search")
         comps?.queryItems = [
-            URLQueryItem(name: "track_name", value: title),
+            URLQueryItem(name: "track_name", value: track),
             URLQueryItem(name: "artist_name", value: artist)
         ]
-        guard let url = comps?.url else { return [] }
-        var request = URLRequest(url: url)
-        request.setValue("Canopy/1.0 (macOS notch app)", forHTTPHeaderField: "User-Agent")
-        request.timeoutInterval = 8
-        do {
-            let (data, _) = try await URLSession.shared.data(for: request)
-            let results = try JSONDecoder().decode([Response].self, from: data)
-            if let first = results.first(where: { ($0.syncedLyrics ?? "").isEmpty == false }),
-               let lrc = first.syncedLyrics {
-                return parseLRC(lrc)
-            }
-            return []
-        } catch {
-            return []
+        guard let url = comps?.url else { return nil }
+        guard let data = try? await fetchData(url) else { return nil }
+        guard let results = try? JSONDecoder().decode([Response].self, from: data) else { return nil }
+
+        // Prefer the synced entry whose duration is closest to the playing track.
+        let synced = results
+            .filter { ($0.syncedLyrics ?? "").isEmpty == false }
+            .min { abs(($0.duration ?? 0) - duration) < abs(($1.duration ?? 0) - duration) }
+        if let synced, let lrc = synced.syncedLyrics, !lrc.isEmpty {
+            return parseLRC(lrc)
         }
+        // Fallback: any plain lyrics, distributed evenly across the track.
+        if let plain = results.first(where: { !($0.plainLyrics ?? "").isEmpty })?.plainLyrics {
+            return parsePlain(plain, duration: duration)
+        }
+        return nil
     }
+
+    // MARK: - Parsing
 
     /// Parses LRC text ("[mm:ss.xx] line") into time-sorted lyric lines.
     static func parseLRC(_ lrc: String) -> [LyricLine] {
@@ -98,5 +148,19 @@ enum LyricsService {
             }
         }
         return lines.sorted { $0.time < $1.time }
+    }
+
+    /// Distributes plain (unsynced) lyrics evenly across the track duration
+    /// so they still scroll in time even without timestamps.
+    static func parsePlain(_ text: String, duration: Double) -> [LyricLine] {
+        let lines = text
+            .split(whereSeparator: { $0.isNewline })
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        guard !lines.isEmpty, duration > 0 else { return [] }
+        let per = duration / Double(lines.count)
+        return lines.enumerated().map { offset, element in
+            LyricLine(time: per * Double(offset), text: element)
+        }
     }
 }
