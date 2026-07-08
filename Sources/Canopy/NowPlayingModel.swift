@@ -32,9 +32,13 @@ final class NowPlayingModel: ObservableObject {
     // Notch banners (now-playing changes + mirrored notifications).
     @Published var currentBanner: NotchBanner?
 
-    private var ticker: Timer?
     private var pollTimer: Timer?
-    private var lastTick = Date()
+    private var frameTimer: Timer?
+    /// 死推算基准：最近一次 refresh/AppleScript 回传的真实播放位置(秒) 及其时刻。
+    /// 每帧用 基准位置 + (当前墙钟 - 基准时刻) 连续推算播放头，避免 0.5s 定格 + 3s 硬重置跳变。
+    private var basePosition: Double = 0
+    private var baseTime = Date()
+    private var wasPlaying = false
     private var artworkHash: Int = 0
     private var trackKey: String = ""
     private var bannerQueue: [NotchBanner] = []
@@ -74,25 +78,37 @@ final class NowPlayingModel: ObservableObject {
         refresh()
         refreshPlaying()
 
-        ticker = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.tick() }
+        // 高帧率显示链路：以 ~60fps 连续推算播放头，让卡拉OK渐变丝滑无跳变。
+        // 实际位置每 3s 由下面的 pollTimer 回传校正（仅作为基准，不再硬覆盖）。
+        let timer = Timer.scheduledTimer(withTimeInterval: 1/60, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.frameTick() }
         }
+        RunLoop.main.add(timer, forMode: .common)
+        frameTimer = timer
 
         // 周期性轮询：MediaRemote 只在“切歌/播放状态变化”时发通知，
         // 若应用启动前就在播放、且之后没有切歌，初始 getNowPlayingInfo
         // 可能返回空，导致永远收不到歌词。这里每 3s 主动拉一次做兜底。
+        // 注意：只作为“基准校正”，不再硬覆盖播放头，因此不会造成跳变。
         pollTimer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.refresh() }
         }
     }
 
-    private func tick() {
+    /// 每帧调用：在 isPlaying 时基于墙钟时间连续推算播放头位置。
+    private func frameTick() {
         let now = Date()
-        let dt = now.timeIntervalSince(lastTick)
-        lastTick = now
-        if isPlaying, duration > 0 {
-            elapsed = min(elapsed + dt, duration)
+        if isPlaying {
+            if !wasPlaying {
+                // 恢复播放：以当前 elapsed 为基准重新计时，避免从旧基准一下子跳出来
+                basePosition = elapsed
+                baseTime = now
+            }
+            if duration > 0 {
+                elapsed = min(basePosition + now.timeIntervalSince(baseTime), duration)
+            }
         }
+        wasPlaying = isPlaying
         updateLyricIndex()
     }
 
@@ -134,8 +150,12 @@ final class NowPlayingModel: ObservableObject {
         artist = info[MediaRemote.kArtist] as? String ?? ""
         album = info[MediaRemote.kAlbum] as? String ?? ""
         duration = info[MediaRemote.kDuration] as? Double ?? 0
-        elapsed = info[MediaRemote.kElapsed] as? Double ?? 0
-        lastTick = Date()
+        let pos = info[MediaRemote.kElapsed] as? Double ?? 0
+        // 死推算基准校正：用真实回传位置重置基准，播放头由 frameTick 连续推算，
+        // 不再直接写 elapsed，从而避免 3s 一次的跳变。
+        basePosition = pos
+        baseTime = Date()
+        elapsed = pos
 
         if let rate = info[MediaRemote.kPlaybackRate] as? Double {
             isPlaying = rate > 0
@@ -269,7 +289,8 @@ final class NowPlayingModel: ObservableObject {
         guard duration > 0 else { return }
         let t = max(0, min(time, duration))
         elapsed = t
-        lastTick = Date()
+        basePosition = t
+        baseTime = Date()
         MediaRemote.shared.setElapsed(t)
         updateLyricIndex()
         scheduleRefresh()
