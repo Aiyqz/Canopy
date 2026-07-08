@@ -31,12 +31,20 @@
    - 帧率 30fps（歌词填充行很长，肉眼无差别，SwiftUI 重绘开销减半）。
    - 实测：播歌时 CPU ≈ 单核 7%（整芯片不到 1%），空闲 ≈ 0%。
 
+5. **多音源歌词（国内平台兜底）**
+   - LRCLIB 服务器在海外、直连常被墙；本 fork 在 LRCLIB 之外新增 **网易云音乐** 与 **QQ 音乐** 两个国内音源作为兜底，任一来源拉到歌词即可展示。
+   - 来源回退链：`LRCLIB（走路由器代理）` → `网易云（直连）` → `QQ音乐（直连）`。
+   - 网易云走 **eapi** 接口（AES-128-ECB 加密，无需 RSA）；QQ 音乐歌词为 base64 编码的 LRC。两者均返回标准 LRC，复用同一套 `parseLRC` 解析。
+   - 统一带**指数退避重试**：遇到 HTTP 429（限流）或 5xx 会自动退避后重试，失败时切换到下一个来源。
+   - 移植自开源歌词库 [WXRIW/Lyricify-Lyrics-Helper](https://github.com/WXRIW/Lyricify-Lyrics-Helper) 的多音源客户端（端点 / 解析 / 限流）。
+   - 待办：酷狗音乐（其开源客户端未提供歌词下载端点，暂缓，见文末 TODO）。
+
 ---
 
 ## 功能特性
 
 - **灵动岛媒体播放器** —— 贴合刘海的黑色面板，悬停展开为完整播放器：封面、标题/艺人、动态音律条、可拖动进度条、播放/上一首/下一首。通过私有 `MediaRemote` 框架读取并控制系统级正在播放。
-- **时间同步歌词** —— 来自 [LRCLIB](https://lrclib.net)（免费、无需 API key），解析 LRC 并按播放进度跟踪。在灵动岛与小组件中展示，并带**从专辑封面提取的类 Apple Music 渐变色**。
+- **时间同步歌词** —— 多音源获取：优先 [LRCLIB](https://lrclib.net)（免费、无需 API key），并用 **网易云音乐 / QQ 音乐** 国内平台直连兜底；解析 LRC 后按播放进度跟踪。在灵动岛与小组件中展示，并带**从专辑封面提取的类 Apple Music 渐变色**。
 - **Liquid Glass 锁屏小组件** —— 磨砂玻璃桌面小组件（窗口背后模糊 + 专辑封面渐变），含 **4 种预设**：锁屏（iOS 风格时钟 + 正在播放卡片）、正在播放、歌词（滚动同步）、极简时钟。
 - **灵动岛横幅** —— 切歌与**系统通知镜像**从刘海滑下。镜像读取通知中心数据库（需要「完全磁盘访问」权限，缺失时优雅降级）。
 - **文件拖放暂存区** —— 把文件拖到灵动岛暂存，之后可拖出、在 Finder 中显示或清空。
@@ -65,7 +73,7 @@ swift build
 swift run Canopy
 ```
 
-> 拉取 LRCLIB 歌词需要联网；LRCLIB 服务器在海外，若直连经常超时，可在 `LyricsService.swift` 中配置代理（本 fork 已写死路由器代理 `192.168.10.1:20171` / SOCKS5 `:20170`）。
+> 拉取 LRCLIB 歌词需要联网；LRCLIB 服务器在海外，若直连经常超时，可在 `LyricsService.swift` 中配置代理（本 fork 已写死路由器代理 `192.168.10.1:20171` / SOCKS5 `:20170`）。国内音源（网易云 / QQ音乐）**直连即可，无需代理**。
 
 ### 离屏验证渲染模式
 
@@ -92,7 +100,7 @@ swift run Canopy --icon /tmp/icon.png
 | `Sources/Canopy/main.swift` | 入口 + `--snapshot` / `--icon` 模式 |
 | `MediaRemote.swift` | 私有 MediaRemote.framework 桥接 |
 | `NowPlayingModel.swift` | 可观察状态：播放、歌词、色板、暂存区、横幅（含死推算/帧定时器） |
-| `LyricsService.swift` | LRCLIB 拉取 + LRC 解析（含繁→简转换、代理、重试） |
+| `LyricsService.swift` | 多音源歌词（LRCLIB / 网易云 / QQ音乐）拉取 + LRC 解析（含繁→简转换、代理、eapi 加密、限流重试） |
 | `TraditionalSimplified.swift` | 繁→简映射表（本 fork 新增，绕开失效的 CFStringTransform） |
 | `ColorExtractor.swift` | 专辑封面 → 渐变色板 |
 | `NotchController.swift` / `Views/NotchView.swift` | 灵动岛窗口 + 收起/横幅/展开界面（含卡拉OK渐变） |
@@ -100,6 +108,15 @@ swift run Canopy --icon /tmp/icon.png
 | `NotificationMirror.swift` | 通知中心数据库读取 |
 | `SettingsStore.swift` | 持久化设置 + 登录启动 |
 | `AppIcon.swift` | 程序化生成应用图标 |
+
+---
+
+## 待办 / TODO
+
+- [x] **多音源歌词（国产平台兜底）**：原只依赖海外 LRCLIB（常因被墙而拉不到歌词）。已移植网易云、QQ音乐作为直连兜底，回退链 `LRCLIB → 网易云 → QQ音乐`，带限流重试。
+- [ ] **酷狗音乐**：Lyricify 开源客户端中酷狗仅提供搜索端点、未提供歌词下载端点，暂未纳入；后续可从 `lyrics.kugou.com/download` 自行实现（base64 + gzip）。
+- [ ] **翻译歌词联动**：网易云 `tlyric` / QQ `trans` 已是现成的译文 LRC，可在灵动岛加一层「译」展示（目前只渲染主歌词）。
+- [ ] **逐字歌词**：网易云 `yrc`、QQ `qrc`（DES 加密）为逐字格式，可进一步做真正的逐字卡拉OK（目前是整行进度填充）。
 
 ---
 
