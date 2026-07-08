@@ -78,13 +78,9 @@ final class NowPlayingModel: ObservableObject {
         refresh()
         refreshPlaying()
 
-        // 高帧率显示链路：以 ~60fps 连续推算播放头，让卡拉OK渐变丝滑无跳变。
-        // 实际位置每 3s 由下面的 pollTimer 回传校正（仅作为基准，不再硬覆盖）。
-        let timer = Timer.scheduledTimer(withTimeInterval: 1/60, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.frameTick() }
-        }
-        RunLoop.main.add(timer, forMode: .common)
-        frameTimer = timer
+        // 高帧率显示链路按需启动：仅在“正在播放”时跑 60fps 定时器连续推算播放头，
+        // 暂停/空闲时立即停止（stopFrameTimer），避免空转烧 CPU。
+        // 首次播放由 refresh()/refreshPlaying() 触发 startFrameTimer()。
 
         // 周期性轮询：MediaRemote 只在“切歌/播放状态变化”时发通知，
         // 若应用启动前就在播放、且之后没有切歌，初始 getNowPlayingInfo
@@ -95,20 +91,40 @@ final class NowPlayingModel: ObservableObject {
         }
     }
 
+    private func startFrameTimer() {
+        guard frameTimer == nil else { return }
+        // 30fps 足够驱动卡拉OK渐变（填充行跨度数秒，逐帧位移远小于 4% 过渡带，肉眼无差别），
+        // 相比 60fps 省约一半 SwiftUI 重绘开销。
+        let timer = Timer.scheduledTimer(withTimeInterval: 1/30, repeats: true) { [weak self] _ in
+            // 定时器本就在主线程/主 RunLoop 触发，用 assumeIsolated 同步调用，零异步跳转开销。
+            MainActor.assumeIsolated { self?.frameTick() }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        frameTimer = timer
+    }
+
+    private func stopFrameTimer() {
+        frameTimer?.invalidate()
+        frameTimer = nil
+    }
+
     /// 每帧调用：在 isPlaying 时基于墙钟时间连续推算播放头位置。
     private func frameTick() {
-        let now = Date()
-        if isPlaying {
-            if !wasPlaying {
-                // 恢复播放：以当前 elapsed 为基准重新计时，避免从旧基准一下子跳出来
-                basePosition = elapsed
-                baseTime = now
-            }
-            if duration > 0 {
-                elapsed = min(basePosition + now.timeIntervalSince(baseTime), duration)
-            }
+        guard isPlaying else {
+            wasPlaying = false
+            stopFrameTimer() // 暂停/空闲：停表，不再空转烧 CPU
+            return
         }
-        wasPlaying = isPlaying
+        let now = Date()
+        if !wasPlaying {
+            // 恢复播放：以当前 elapsed 为基准重新计时，避免从旧基准一下子跳出来
+            basePosition = elapsed
+            baseTime = now
+        }
+        if duration > 0 {
+            elapsed = min(basePosition + now.timeIntervalSince(baseTime), duration)
+        }
+        wasPlaying = true
         updateLyricIndex()
     }
 
@@ -141,6 +157,7 @@ final class NowPlayingModel: ObservableObject {
                 } else {
                     self?.isPlaying = false
                 }
+                if self?.isPlaying == true { self?.startFrameTimer() }
             }
         }
     }
@@ -160,6 +177,7 @@ final class NowPlayingModel: ObservableObject {
         if let rate = info[MediaRemote.kPlaybackRate] as? Double {
             isPlaying = rate > 0
         }
+        if isPlaying { startFrameTimer() } // 开始播放：启动 60fps 高帧率链路
 
         if let data = info[MediaRemote.kArtworkData] as? Data {
             let h = data.hashValue
@@ -254,6 +272,11 @@ final class NowPlayingModel: ObservableObject {
             if currentLyricIndex != nil { currentLyricIndex = nil }
             return
         }
+        // 快速判定：当前行尚未结束则直接跳过，避免每帧都遍历全部歌词（30/60fps 下省掉 99% 的扫描）
+        if let i = currentLyricIndex, lyrics.indices.contains(i) {
+            let nextTime = lyrics.indices.contains(i + 1) ? lyrics[i + 1].time : .infinity
+            if elapsed + 0.25 < nextTime { return }
+        }
         var idx: Int?
         for (i, line) in lyrics.enumerated() {
             if line.time <= elapsed + 0.25 { idx = i } else { break }
@@ -268,6 +291,7 @@ final class NowPlayingModel: ObservableObject {
     func togglePlayPause() {
         MediaRemote.shared.send(.togglePlayPause)
         isPlaying.toggle() // optimistic; corrected by notification
+        if isPlaying { startFrameTimer() } else { stopFrameTimer() }
         scheduleRefresh()
     }
 
