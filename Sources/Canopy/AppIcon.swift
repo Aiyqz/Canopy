@@ -1,3 +1,4 @@
+// AppIcon.swift —— 生成应用图标（叶片 + 绿色渐变圆角方块）。
 import SwiftUI
 
 /// The Canopy app icon — a leaf over a green gradient squircle with a hint of

@@ -1,3 +1,4 @@
+// WidgetView.swift —— 小组件背后的磨砂玻璃模糊层。
 import SwiftUI
 
 /// A behind-window blur so the widget reads as real frosted glass over the

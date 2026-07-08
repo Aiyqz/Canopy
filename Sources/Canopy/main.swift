@@ -1,10 +1,10 @@
 import AppKit
 
-// Top-level executable code runs on the main thread.
+// 顶层可执行代码，运行在主线程。
 MainActor.assumeIsolated {
     let app = NSApplication.shared
 
-    // Offscreen render mode for verification: `Canopy --snapshot [dir]`.
+    // 离屏渲染模式（用于验证界面）：`Canopy --snapshot [目录]`。
     if let idx = CommandLine.arguments.firstIndex(of: "--snapshot") {
         app.setActivationPolicy(.prohibited)
         let dir = CommandLine.arguments.count > idx + 1 ? CommandLine.arguments[idx + 1] : "/tmp"
@@ -12,7 +12,7 @@ MainActor.assumeIsolated {
         exit(0)
     }
 
-    // Icon render mode: `Canopy --icon <path.png>`.
+    // 图标渲染模式：`Canopy --icon <路径.png>`。
     if let idx = CommandLine.arguments.firstIndex(of: "--icon") {
         app.setActivationPolicy(.prohibited)
         let path = CommandLine.arguments.count > idx + 1 ? CommandLine.arguments[idx + 1] : "/tmp/canopy_icon.png"
@@ -22,7 +22,7 @@ MainActor.assumeIsolated {
 
     let delegate = AppDelegate()
     app.delegate = delegate
-    // Accessory: no Dock icon, no main menu — lives in the menu bar + notch.
+    // 设为辅助应用：不显示 Dock 图标、无主菜单，仅常驻菜单栏 + 灵动岛。
     app.setActivationPolicy(.accessory)
     app.run()
 }

@@ -133,7 +133,7 @@ struct CollapsedPill: View {
             if let lyric = vm.currentLyric {
                 Text(lyric)
                     .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(karaokeForeground(vm.currentLyricProgress))
+                    .foregroundStyle(karaokeForeground(vm.currentLyricProgress)) // 应用卡拉OK渐变高亮（已唱白色、未唱暗灰）
                     .shadow(color: .black.opacity(0.6), radius: 2, y: 1)
                     .lineLimit(1)
                     .truncationMode(.middle)
@@ -232,7 +232,7 @@ struct ExpandedPanel: View {
             if let lyric = vm.currentLyric {
                 Text(lyric)
                     .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(karaokeForeground(vm.currentLyricProgress))
+                    .foregroundStyle(karaokeForeground(vm.currentLyricProgress)) // 应用卡拉OK渐变高亮（已唱白色、未唱暗灰）
                     .shadow(color: .black.opacity(0.6), radius: 2, y: 1)
                     .lineLimit(1)
                     .truncationMode(.middle)
@@ -417,6 +417,7 @@ private func timeString(_ t: Double) -> String {
 
 @MainActor
 enum NotchSnapshotter {
+    /// 构造一份用于快照渲染的示例模型（固定进度，便于核对卡拉OK渐变与布局）。
     static func sampleModel(withShelf: Bool = false) -> NowPlayingModel {
         let model = NowPlayingModel()
         model.title = "Midnight City"
@@ -431,7 +432,7 @@ enum NotchSnapshotter {
             Color(red: 0.85, green: 0.25, blue: 0.45),
             Color(red: 0.40, green: 0.20, blue: 0.55)
         ]
-        // Neutral placeholder lines (not real lyrics) for layout verification.
+        // 中性的占位歌词行（非真实歌词），仅用于布局核对。
         model.lyrics = [
             LyricLine(time: 60, text: "\u{266A} previous line placeholder"),
             LyricLine(time: 70, text: "earlier verse placeholder"),
@@ -449,6 +450,7 @@ enum NotchSnapshotter {
         return model
     }
 
+    /// 把示例模型离屏渲染成多张 PNG 到指定目录（用于界面验证，不显示窗口）。
     static func run(to directory: String) {
         let model = sampleModel()
         let metrics = NotchMetrics(notchWidth: 200, notchHeight: 34)

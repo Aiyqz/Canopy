@@ -1,3 +1,4 @@
+// WidgetContent.swift —— 桌面“锁屏”小组件内容（Liquid Glass 风格歌词）。
 import SwiftUI
 
 /// The desktop "lockscreen" widget content. Rendered over a Liquid Glass

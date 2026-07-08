@@ -1,3 +1,4 @@
+// NotificationMirror.swift —— 镜像系统通知中心，把系统通知投到灵动岛。
 import AppKit
 import SQLite3
 

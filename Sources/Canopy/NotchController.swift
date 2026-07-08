@@ -1,3 +1,4 @@
+// NotchController.swift —— 控制灵动岛窗口的显示/隐藏与交互。
 import AppKit
 import SwiftUI
 

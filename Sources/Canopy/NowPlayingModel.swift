@@ -3,8 +3,8 @@ import Combine
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Observable now-playing state, fed by MediaRemote notifications + polling.
-/// Also owns lyrics, the extracted color palette, and the file-drop shelf.
+/// 当前播放状态（可被 UI 观察）。数据来源：MediaRemote 通知 + 主动轮询。
+/// 同时管理歌词、从专辑封面提取的渐变色板、以及文件拖放暂存区。
 @MainActor
 final class NowPlayingModel: ObservableObject {
     @Published var title: String = ""
@@ -15,21 +15,21 @@ final class NowPlayingModel: ObservableObject {
     @Published var duration: Double = 0
     @Published var elapsed: Double = 0
 
-    /// True once we've seen any track at all.
+    /// 只要曾经出现过任意曲目就为 true（用于判断是否有可显示内容）。
     @Published var hasContent: Bool = false
 
-    // Apple-Music-style gradient palette derived from album art.
+    // 从专辑封面提取的渐变色板（类似 Apple Music 的风格）。
     @Published var palette: [Color] = ColorExtractor.fallback
 
-    // Time-synced lyrics.
+    // 时间同步歌词（按时间戳排序的行）。
     @Published var lyrics: [LyricLine] = []
     @Published var currentLyricIndex: Int?
 
-    // File-drop shelf.
+    // 文件拖放暂存区（把文件拖到灵动岛可暂存）。
     @Published var shelfFiles: [URL] = []
     @Published var isDropTargeted: Bool = false
 
-    // Notch banners (now-playing changes + mirrored notifications).
+    // 灵动岛横幅（切歌 / 系统通知镜像时弹出）。
     @Published var currentBanner: NotchBanner?
 
     private var pollTimer: Timer?
@@ -64,6 +64,7 @@ final class NowPlayingModel: ObservableObject {
         return min(max((elapsed - start) / span, 0), 1)
     }
 
+    /// 启动：注册 MediaRemote 通知、首次刷新、并启动 3s 兜底轮询。
     func start() {
         MediaRemote.shared.registerForNotifications()
 
@@ -128,6 +129,7 @@ final class NowPlayingModel: ObservableObject {
         updateLyricIndex()
     }
 
+    /// 拉取当前播放信息：优先 MediaRemote，取不到则走 AppleScript 兜底。
     func refresh() {
         MediaRemote.shared.getNowPlayingInfo { [weak self] info in
             let hasMedia = (info[MediaRemote.kTitle] as? String)?.isEmpty == false
@@ -162,6 +164,7 @@ final class NowPlayingModel: ObservableObject {
         }
     }
 
+    /// 把一份播放信息字典写入模型各字段（标题/艺人/时长/位置/色板/歌词），并触发切歌横幅。
     private func apply(_ info: [String: Any]) {
         title = info[MediaRemote.kTitle] as? String ?? ""
         artist = info[MediaRemote.kArtist] as? String ?? ""
@@ -197,7 +200,7 @@ final class NowPlayingModel: ObservableObject {
 
         if !title.isEmpty { hasContent = true }
 
-        // New track? refresh lyrics + show a now-playing banner.
+        // 是否切歌？是则重新拉歌词，并弹出“正在播放”横幅。
         let key = "\(title)|\(artist)|\(album)"
         if key != trackKey, !title.isEmpty {
             let wasFirst = trackKey.isEmpty
@@ -252,6 +255,7 @@ final class NowPlayingModel: ObservableObject {
 
     // MARK: Lyrics
 
+    /// 异步拉取并加载时间同步歌词（按 trackKey 防止陈旧结果覆盖新歌）。
     private func loadLyrics(title: String, artist: String, album: String, duration: Double, key: String) {
         lyrics = []
         currentLyricIndex = nil
@@ -288,9 +292,10 @@ final class NowPlayingModel: ObservableObject {
 
     // MARK: Commands
 
+    /// 播放/暂停切换：发送指令并乐观更新 isPlaying，同时驱动高帧率定时器启停。
     func togglePlayPause() {
         MediaRemote.shared.send(.togglePlayPause)
-        isPlaying.toggle() // optimistic; corrected by notification
+        isPlaying.toggle() // 乐观更新：先立即切换，随后由通知/轮询纠偏
         if isPlaying { startFrameTimer() } else { stopFrameTimer() }
         scheduleRefresh()
     }
@@ -309,6 +314,7 @@ final class NowPlayingModel: ObservableObject {
         seek(toTime: max(0, min(fraction, 1)) * duration)
     }
 
+    /// 跳转到指定播放位置（秒）：同步重置死推算基准，避免渐变跳变。
     func seek(toTime time: Double) {
         guard duration > 0 else { return }
         let t = max(0, min(time, duration))

@@ -1,3 +1,4 @@
+// AppDelegate.swift —— 应用入口与生命周期管理（上游 Canopy 原始模块，本 fork 未修改）。
 import AppKit
 
 @MainActor

@@ -1,3 +1,4 @@
+// MediaRemote.swift —— 对私有 MediaRemote.framework 的轻量封装（macOS 26 下部分能力失效，故新增 AppleScript 兜底）。
 import Foundation
 
 /// Thin wrapper around the private MediaRemote.framework.

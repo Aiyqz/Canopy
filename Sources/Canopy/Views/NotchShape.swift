@@ -1,3 +1,4 @@
+// NotchShape.swift —— 贴合硬件刘海形状的黑色面板路径。
 import SwiftUI
 
 /// A black slab that extends the hardware notch: subtle rounding on top where it

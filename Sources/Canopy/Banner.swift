@@ -1,3 +1,4 @@
+// Banner.swift —— 灵动岛横幅数据模型（切歌 / 系统通知镜像时弹出）。
 import AppKit
 
 /// A transient banner shown in the notch — either a "now playing" change or a

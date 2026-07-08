@@ -2,12 +2,12 @@ import Foundation
 
 struct LyricLine: Identifiable, Equatable {
     let id = UUID()
-    let time: Double      // seconds
+    let time: Double      // 起始时间（秒）
     let text: String
 }
 
-/// Fetches time-synced lyrics from LRCLIB (lrclib.net) — a free, open,
-/// no-API-key community lyrics database that returns standard LRC data.
+/// 从 LRCLIB (lrclib.net) 拉取时间同步歌词。
+/// LRCLIB 是一个免费、开放、无需 API key 的社区歌词库，返回标准 LRC 数据。
 enum LyricsService {
     private struct Response: Decodable {
         let syncedLyrics: String?
@@ -15,8 +15,7 @@ enum LyricsService {
         let duration: Double?
     }
 
-    /// Public entry: returns time-synced lyric lines, or a plain-lyrics
-    /// fallback (evenly distributed across the track) if no synced version exists.
+    /// 公开入口：返回时间同步歌词行；若没有同步版本，则退化为纯文本歌词（在整首歌内均匀铺开）。
     static func fetchSynced(title: String, artist: String, album: String, duration: Double) async -> [LyricLine] {
         guard !title.isEmpty, !artist.isEmpty else { return [] }
 
@@ -131,7 +130,7 @@ enum LyricsService {
 
     // MARK: - Parsing
 
-    /// Parses LRC text ("[mm:ss.xx] line") into time-sorted lyric lines.
+    /// 解析 LRC 文本（"[mm:ss.xx] 歌词"）为按时间排序的歌词行。
     static func parseLRC(_ lrc: String) -> [LyricLine] {
         var lines: [LyricLine] = []
         let tagPattern = try? NSRegularExpression(pattern: #"\[(\d{1,2}):(\d{2})(?:[.:](\d{1,3}))?\]"#)
@@ -162,8 +161,8 @@ enum LyricsService {
         return lines.sorted { $0.time < $1.time }
     }
 
-    /// Distributes plain (unsynced) lyrics evenly across the track duration
-    /// so they still scroll in time even without timestamps.
+    /// 把纯文本（无时间戳）歌词在整首歌时长内均匀铺开，
+    /// 这样即使没有时间戳也能随播放进度滚动。
     static func parsePlain(_ text: String, duration: Double) -> [LyricLine] {
         let lines = text
             .split(whereSeparator: { $0.isNewline })

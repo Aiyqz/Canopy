@@ -1,3 +1,4 @@
+// WidgetController.swift —— 小组件窗口控制器。
 import AppKit
 import SwiftUI
 import Combine

@@ -1,3 +1,4 @@
+// ColorExtractor.swift —— 从专辑封面提取渐变色板（类 Apple Music 风格）。
 import AppKit
 import SwiftUI
 

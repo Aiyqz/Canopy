@@ -1,3 +1,4 @@
+// Artwork.swift —— 专辑封面视图（无封面时回退为音乐图标）。
 import SwiftUI
 
 /// Album art with a graceful fallback to a music glyph.

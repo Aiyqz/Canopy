@@ -1,3 +1,4 @@
+// EqualizerBars.swift —— 播放时显示在灵动岛旁的小型动态音律条。
 import SwiftUI
 
 /// Tiny animated audio bars shown beside the notch while something is playing.

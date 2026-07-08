@@ -1,68 +1,110 @@
-# 🌿 Canopy
+# 🌿 Canopy（灵动岛歌词 · 中文说明）
 
-A refined, productivity-focused **Dynamic Island experience for macOS** — a native SwiftUI app that wraps your Mac's notch with media controls, time-synced lyrics, a Liquid Glass lockscreen widget, a file-drop shelf, and notification mirroring.
+一个专注效率的 **macOS 灵动岛体验**：原生 SwiftUI 应用，把 Mac 的刘海/灵动岛包成一个媒体控制器，带时间同步歌词、Liquid Glass 锁屏小组件、文件拖放暂存区，以及系统通知镜像。
 
-> Inspired by [getcanopy.pro](https://getcanopy.pro/). Built from scratch in Swift.
+> 灵感来自 [getcanopy.pro](https://getcanopy.pro/)，使用 Swift 从零实现。
+> 本仓库是 `6gx42o/Canopy` 的 fork（GitHub: `Aiyqz/Canopy`），在 upstream 基础上做了若干中文环境与体验相关的增强。
 
-## Features
+---
 
-- **Notch media player** — a black slab that hugs the notch and expands on hover into a full player: artwork, title/artist, animated EQ bars, a **scrubbable** progress bar, and play / prev / next. Reads & controls whatever is playing system-wide via the private `MediaRemote` framework.
-- **Time-synced lyrics** — fetched from [LRCLIB](https://lrclib.net) (free, no API key), parsed from LRC, and tracked against playback. Shown in the notch and the widget with **Apple-Music-style color gradients** sampled from the album art. **Tap a line to seek.**
-- **Liquid Glass lockscreen widget** — a frosted-glass desktop widget (behind-window blur + album-art gradient) with **4 presets**: Lockscreen (iOS-style clock + now-playing card), Now Playing (art-forward), Lyrics (scrolling synced), and Minimal Clock.
-- **Notch banners** — now-playing changes and **mirrored system notifications** slide down from the notch. Mirroring tails the Notification Center database (requires Full Disk Access; degrades gracefully).
-- **File-drop shelf** — drop files onto the notch to stash them, then drag them back out, reveal in Finder, or clear.
-- **Menu-bar app** — no Dock icon. Toggle the widget, switch presets, enable Launch at Login, and grant access from the leaf menu.
+## 本 fork 相比上游的改动
 
-## Requirements
+这些改动是为「免费开源替代收费 Dynamic Lyrics + 中文环境」而做的：
 
-- macOS 14+ (developed on macOS 26 / Apple Silicon)
-- Swift 6.2 / Xcode 26
+1. **卡拉OK 逐字渐变高亮**
+   - 当前歌词行按播放进度从左到右渐变填充：已唱部分纯白高亮，未唱部分暗灰（4% 软过渡带）。
+   - 由 `NotchView.karaokeForeground(_:)` 与 `NowPlayingModel.currentLyricProgress` 实现。
+   - 注：LRCLIB 只提供**行级**时间戳，所以这是「整行内的进度填充」，并非逐字精确。
 
-## Build & run
+2. **繁体 → 简体中文**
+   - LRCLIB 的华语歌词多为繁体（孙燕姿 / 苏打绿等）。
+   - macOS 26 的 `CFStringTransform` 在本机**完全失效**（所有 transform 均返回 false），因此改用内置的 `TraditionalSimplified.swift`（586 对繁→简映射表，零依赖、运行时可靠）。
+   - `LyricsService` 在拉到歌词后会自动转换为简体。
+
+3. **macOS 26 下播放信息兜底**
+   - 私有 `MediaRemote` API 在 macOS 26 开发者预览下失效（取不到正在播放的信息）。
+   - 改为用 **AppleScript 直接读取 Spotify / Music** 的当前播放作为兜底（`fetchNowPlayingViaScript`），每 3 秒轮询校正一次。
+
+4. **性能调优（丝滑 + 低占用）**
+   - 高帧率渐变只在**正在播放**时运行，暂停/空闲立即停表，消除空转烧 CPU。
+   - 播放头用「死推算（dead-reckoning）」基于墙钟时间连续推算，避免 3 秒一次的硬重置跳变。
+   - 帧率 30fps（歌词填充行很长，肉眼无差别，SwiftUI 重绘开销减半）。
+   - 实测：播歌时 CPU ≈ 单核 7%（整芯片不到 1%），空闲 ≈ 0%。
+
+---
+
+## 功能特性
+
+- **灵动岛媒体播放器** —— 贴合刘海的黑色面板，悬停展开为完整播放器：封面、标题/艺人、动态音律条、可拖动进度条、播放/上一首/下一首。通过私有 `MediaRemote` 框架读取并控制系统级正在播放。
+- **时间同步歌词** —— 来自 [LRCLIB](https://lrclib.net)（免费、无需 API key），解析 LRC 并按播放进度跟踪。在灵动岛与小组件中展示，并带**从专辑封面提取的类 Apple Music 渐变色**。
+- **Liquid Glass 锁屏小组件** —— 磨砂玻璃桌面小组件（窗口背后模糊 + 专辑封面渐变），含 **4 种预设**：锁屏（iOS 风格时钟 + 正在播放卡片）、正在播放、歌词（滚动同步）、极简时钟。
+- **灵动岛横幅** —— 切歌与**系统通知镜像**从刘海滑下。镜像读取通知中心数据库（需要「完全磁盘访问」权限，缺失时优雅降级）。
+- **文件拖放暂存区** —— 把文件拖到灵动岛暂存，之后可拖出、在 Finder 中显示或清空。
+- **菜单栏应用** —— 无 Dock 图标。通过叶片菜单切换小组件、切换预设、设置登录启动、授予权限。
+
+---
+
+## 环境要求
+
+- macOS 14+（开发环境为 macOS 26 / Apple Silicon）
+- Swift 6.2 / Xcode 26（或仅命令行工具亦可编译）
+
+---
+
+## 构建与运行
 
 ```sh
-./build.sh release      # compiles + assembles an ad-hoc-signed Canopy.app (with icon)
+./build.sh release      # 编译并组装一个 ad-hoc 签名的 Canopy.app（含图标）
 open Canopy.app
 ```
 
-Or during development:
+开发期间也可：
 
 ```sh
 swift build
 swift run Canopy
 ```
 
-### Verification render mode
+> 拉取 LRCLIB 歌词需要联网；LRCLIB 服务器在海外，若直连经常超时，可在 `LyricsService.swift` 中配置代理（本 fork 已写死路由器代理 `192.168.10.1:20171` / SOCKS5 `:20170`）。
 
-The app can render its own UI to PNG offscreen (no screen-recording permission needed):
+### 离屏验证渲染模式
+
+应用可把自身界面离屏渲染成 PNG（无需屏幕录制权限）：
 
 ```sh
-swift run Canopy --snapshot /tmp     # writes notch + widget preset PNGs
+swift run Canopy --snapshot /tmp     # 写出灵动岛 + 小组件预设的 PNG
 swift run Canopy --icon /tmp/icon.png
 ```
 
-## Permissions
+---
 
-- **Media control / now-playing** — works out of the box via `MediaRemote`.
-- **Notification mirroring** — needs **Full Disk Access** (System Settings → Privacy & Security → Full Disk Access → add Canopy). The leaf menu shows live status and a shortcut to the settings pane. Now-playing banners work without it.
+## 权限
 
-## Project layout
+- **媒体控制 / 正在播放** —— 通过 `MediaRemote` 默认可用。
+- **通知镜像** —— 需要**完全磁盘访问**（系统设置 → 隐私与安全性 → 完全磁盘访问 → 加入 Canopy）。叶片菜单会显示实时状态并快捷跳转设置页。切歌横幅无需该权限。
 
-| Path | Purpose |
-|------|---------|
-| `Sources/Canopy/main.swift` | Entry point + `--snapshot` / `--icon` modes |
-| `MediaRemote.swift` | Private MediaRemote.framework bridge |
-| `NowPlayingModel.swift` | Observable state: playback, lyrics, palette, shelf, banners |
-| `LyricsService.swift` | LRCLIB fetch + LRC parsing |
-| `ColorExtractor.swift` | Album-art → gradient palette |
-| `NotchController.swift` / `Views/NotchView.swift` | The notch window + collapsed / banner / expanded UI |
-| `WidgetController.swift` / `Views/WidgetView.swift` / `Views/WidgetContent.swift` | Liquid Glass desktop widget + presets |
-| `NotificationMirror.swift` | Notification Center DB tailing |
-| `SettingsStore.swift` | Persisted settings + Launch at Login |
-| `AppIcon.swift` | Programmatic app icon |
+---
 
-## Notes
+## 项目结构
 
-This is an independent, educational reimplementation — not affiliated with Canopy. It uses Apple's private `MediaRemote` framework (the same approach as other notch apps), so it is intended for personal use, not the Mac App Store.
+| 路径 | 作用 |
+|------|------|
+| `Sources/Canopy/main.swift` | 入口 + `--snapshot` / `--icon` 模式 |
+| `MediaRemote.swift` | 私有 MediaRemote.framework 桥接 |
+| `NowPlayingModel.swift` | 可观察状态：播放、歌词、色板、暂存区、横幅（含死推算/帧定时器） |
+| `LyricsService.swift` | LRCLIB 拉取 + LRC 解析（含繁→简转换、代理、重试） |
+| `TraditionalSimplified.swift` | 繁→简映射表（本 fork 新增，绕开失效的 CFStringTransform） |
+| `ColorExtractor.swift` | 专辑封面 → 渐变色板 |
+| `NotchController.swift` / `Views/NotchView.swift` | 灵动岛窗口 + 收起/横幅/展开界面（含卡拉OK渐变） |
+| `WidgetController.swift` / `Views/WidgetView.swift` / `Views/WidgetContent.swift` | Liquid Glass 桌面小组件 + 预设 |
+| `NotificationMirror.swift` | 通知中心数据库读取 |
+| `SettingsStore.swift` | 持久化设置 + 登录启动 |
+| `AppIcon.swift` | 程序化生成应用图标 |
 
-🤖 Built with [Claude Code](https://claude.com/claude-code)
+---
+
+## 说明
+
+这是一个独立、用于学习目的的重新实现，与 Canopy 官方无隶属关系。它使用了 Apple 的私有 `MediaRemote` 框架（与同类灵动岛应用相同的做法），因此仅限**个人使用**，不会上架 Mac App Store。
+
+🤖 使用 [Claude Code](https://claude.com/claude-code) 构建

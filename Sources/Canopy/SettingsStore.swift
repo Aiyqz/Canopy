@@ -1,3 +1,4 @@
+// SettingsStore.swift —— 持久化用户设置（含登录项 / 自启动）。
 import SwiftUI
 import ServiceManagement
 
