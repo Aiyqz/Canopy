@@ -33,6 +33,7 @@ final class NowPlayingModel: ObservableObject {
     @Published var currentBanner: NotchBanner?
 
     private var ticker: Timer?
+    private var pollTimer: Timer?
     private var lastTick = Date()
     private var artworkHash: Int = 0
     private var trackKey: String = ""
@@ -66,6 +67,13 @@ final class NowPlayingModel: ObservableObject {
         ticker = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.tick() }
         }
+
+        // 周期性轮询：MediaRemote 只在“切歌/播放状态变化”时发通知，
+        // 若应用启动前就在播放、且之后没有切歌，初始 getNowPlayingInfo
+        // 可能返回空，导致永远收不到歌词。这里每 3s 主动拉一次做兜底。
+        pollTimer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.refresh() }
+        }
     }
 
     private func tick() {
@@ -80,13 +88,34 @@ final class NowPlayingModel: ObservableObject {
 
     func refresh() {
         MediaRemote.shared.getNowPlayingInfo { [weak self] info in
-            Task { @MainActor in self?.apply(info) }
+            let hasMedia = (info[MediaRemote.kTitle] as? String)?.isEmpty == false
+            if hasMedia {
+                Task { @MainActor in self?.apply(info) }
+                return
+            }
+            // MediaRemote 取不到（macOS 26 私有 API 在开发者预览下失效）→
+            // 用 AppleScript 直接问 Spotify / Music 当前播放，作为兜底。
+            Task.detached {
+                if let scriptInfo = fetchNowPlayingViaScript() {
+                    Task { @MainActor in self?.apply(scriptInfo) }
+                }
+                // 两边都取不到：保留上一次状态，避免轮询偶发失败把歌词清空 / elapsed 归零
+            }
         }
     }
 
     private func refreshPlaying() {
         MediaRemote.shared.getIsPlaying { [weak self] playing in
-            Task { @MainActor in self?.isPlaying = playing }
+            Task { @MainActor in
+                if playing {
+                    self?.isPlaying = true
+                } else if fetchNowPlayingViaScript() != nil {
+                    // 兜底：AppleScript 能取到说明正在播放
+                    self?.isPlaying = true
+                } else {
+                    self?.isPlaying = false
+                }
+            }
         }
     }
 
@@ -258,4 +287,81 @@ final class NowPlayingModel: ObservableObject {
     func clearShelf() {
         shelfFiles.removeAll()
     }
+}
+
+// MARK: - AppleScript 兜底（MediaRemote 在 macOS 26 下取不到时）
+
+private let scriptBridgePath = "/tmp/canopy_np.scpt"
+private let scriptLock = NSLock()
+private var cachedScriptInfo: [String: Any]?
+private var cachedScriptTime: Date = .distantPast
+
+private func ensureScriptBridge() {
+    let script = """
+    if application "Spotify" is running then
+      tell application "Spotify"
+        if player state is playing then
+          return "SPOTIFY|" & (name of current track) & "|" & (artist of current track) & "|" & (album of current track) & "|" & (duration of current track as text) & "|" & (player position as text)
+        end if
+      end tell
+    end if
+    if application "Music" is running then
+      tell application "Music"
+        if player state is playing then
+          return "MUSIC|" & (name of current track) & "|" & (artist of current track) & "|" & (album of current track) & "|" & (duration of current track as text) & "|" & (player position as text)
+        end if
+      end tell
+    end if
+    return "NONE"
+    """
+    try? script.write(to: URL(fileURLWithPath: scriptBridgePath), atomically: true, encoding: .utf8)
+}
+
+/// 用 AppleScript 直接读取 Spotify / Music 的当前播放，
+/// 返回与 MediaRemote 同形状的字典（kTitle/kArtist/...），取不到返回 nil。
+/// 带缓存 + 串行锁：避免并发 osascript 相互干扰导致偶发返回 nil。
+func fetchNowPlayingViaScript() -> [String: Any]? {
+    scriptLock.lock()
+    defer { scriptLock.unlock() }
+    ensureScriptBridge()
+    guard FileManager.default.fileExists(atPath: scriptBridgePath) else { return cachedIfFresh() }
+    let proc = Process()
+    proc.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+    proc.arguments = [scriptBridgePath]
+    let out = Pipe()
+    let err = Pipe()
+    proc.standardOutput = out
+    proc.standardError = err
+    do { try proc.run() } catch { return cachedIfFresh() }
+    proc.waitUntilExit()
+    let data = out.fileHandleForReading.readDataToEndOfFile()
+    guard let raw = String(data: data, encoding: .utf8)?
+        .trimmingCharacters(in: .whitespacesAndNewlines),
+          !raw.isEmpty, raw != "NONE" else { return cachedIfFresh() }
+    let parts = raw.components(separatedBy: "|")
+    guard parts.count >= 6, parts[0] == "SPOTIFY" || parts[0] == "MUSIC" else { return cachedIfFresh() }
+    let title = parts[1], artist = parts[2], album = parts[3]
+    guard !title.isEmpty, !artist.isEmpty else { return cachedIfFresh() }
+    var duration = Double(parts[4]) ?? 0
+    let position = Double(parts[5]) ?? 0
+    if parts[0] == "SPOTIFY", duration > 10000 { duration /= 1000 } // Spotify 返回毫秒
+    let info: [String: Any] = [
+        MediaRemote.kTitle: title,
+        MediaRemote.kArtist: artist,
+        MediaRemote.kAlbum: album,
+        MediaRemote.kDuration: duration,
+        MediaRemote.kElapsed: position,
+        MediaRemote.kPlaybackRate: 1.0
+    ]
+    cachedScriptInfo = info
+    cachedScriptTime = Date()
+    return info
+}
+
+/// 真正的拉取偶发失败时，5s 内复用上一次成功结果，避免把歌词清空。
+private func cachedIfFresh() -> [String: Any]? {
+    if let c = cachedScriptInfo, Date().timeIntervalSince(cachedScriptTime) < 5 {
+        return c
+    }
+    return nil
 }
