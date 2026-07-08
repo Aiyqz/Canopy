@@ -1,6 +1,23 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
+/// 歌词“卡拉OK”渐变：已唱部分纯白高亮，未唱部分暗（30% 白），
+/// 分界点随当前行播放进度在 0..1 之间移动，直观显示“唱到哪字了”。
+private func karaokeForeground(_ progress: Double) -> LinearGradient {
+    let p = min(max(progress, 0), 1)
+    let lo = max(0, p - 0.04)
+    let hi = min(1, p + 0.04)
+    return LinearGradient(
+        stops: [
+            .init(color: Color.white, location: 0),
+            .init(color: Color.white, location: lo),
+            .init(color: Color.white.opacity(0.30), location: hi),
+            .init(color: Color.white.opacity(0.30), location: 1)
+        ],
+        startPoint: .leading, endPoint: .trailing
+    )
+}
+
 /// The root view that fills the floating notch window. Hover (or an active file
 /// drop) swaps between the collapsed pill and the expanded media panel.
 struct NotchView: View {
@@ -116,12 +133,7 @@ struct CollapsedPill: View {
             if let lyric = vm.currentLyric {
                 Text(lyric)
                     .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [Color.white, Color.white.opacity(0.82)],
-                            startPoint: .leading, endPoint: .trailing
-                        )
-                    )
+                    .foregroundStyle(karaokeForeground(vm.currentLyricProgress))
                     .shadow(color: .black.opacity(0.6), radius: 2, y: 1)
                     .lineLimit(1)
                     .truncationMode(.middle)
@@ -220,12 +232,7 @@ struct ExpandedPanel: View {
             if let lyric = vm.currentLyric {
                 Text(lyric)
                     .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [Color.white, Color.white.opacity(0.82)],
-                            startPoint: .leading, endPoint: .trailing
-                        )
-                    )
+                    .foregroundStyle(karaokeForeground(vm.currentLyricProgress))
                     .shadow(color: .black.opacity(0.6), radius: 2, y: 1)
                     .lineLimit(1)
                     .truncationMode(.middle)
@@ -416,7 +423,7 @@ enum NotchSnapshotter {
         model.artist = "M83"
         model.album = "Hurry Up, We're Dreaming"
         model.duration = 244
-        model.elapsed = 78
+        model.elapsed = 81 // 当前行(78)→下一行(86)，约 37% 进度，演示卡拉OK 渐变填充
         model.isPlaying = true
         model.hasContent = true
         model.palette = [

@@ -22,13 +22,25 @@ enum LyricsService {
 
         // 1) Exact match via /api/get (no album — strict album match causes 404s).
         if let lines = await requestGet(track: title, artist: artist, duration: duration), !lines.isEmpty {
-            return lines
+            return simplify(lines)
         }
         // 2) Fuzzy /api/search — pick the entry whose duration is closest.
         if let lines = await requestSearch(track: title, artist: artist, duration: duration), !lines.isEmpty {
-            return lines
+            return simplify(lines)
         }
         return []
+    }
+
+    // MARK: - 繁体 → 简体
+
+    /// LRCLIB 的华语歌词多为繁体（孙燕姿 / 苏打绿等），用 macOS 原生
+    /// CFStringTransform 转成简体，无需任何第三方依赖。
+    private static func toSimplified(_ text: String) -> String {
+        TraditionalSimplified.convert(text)
+    }
+
+    private static func simplify(_ lines: [LyricLine]) -> [LyricLine] {
+        lines.map { LyricLine(time: $0.time, text: toSimplified($0.text)) }
     }
 
     // MARK: - Network (写死路由器代理 + 重试 + 长超时)

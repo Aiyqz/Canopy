@@ -50,6 +50,16 @@ final class NowPlayingModel: ObservableObject {
         return text.isEmpty ? nil : text
     }
 
+    /// 当前行内的播放进度 0..1，用于歌词“逐字渐变”高亮（卡拉OK 效果）。
+    /// 注意：LRCLIB 只提供行级时间戳，所以这是“整行内的进度填充”，并非逐字精确。
+    var currentLyricProgress: Double {
+        guard let i = currentLyricIndex, lyrics.indices.contains(i) else { return 0 }
+        let start = lyrics[i].time
+        let end = lyrics.indices.contains(i + 1) ? lyrics[i + 1].time : (duration > start ? duration : start + 5)
+        let span = max(end - start, 0.5)
+        return min(max((elapsed - start) / span, 0), 1)
+    }
+
     func start() {
         MediaRemote.shared.registerForNotifications()
 
