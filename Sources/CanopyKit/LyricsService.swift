@@ -5,10 +5,15 @@ import CryptoKit
 // MARK: - 歌词行模型
 
 /// 一行时间同步歌词。
-struct LyricLine: Identifiable, Equatable {
-    let id = UUID()
-    let time: Double      // 起始时间（秒）
-    let text: String
+public struct LyricLine: Identifiable, Equatable {
+    public let id = UUID()
+    public let time: Double      // 起始时间（秒）
+    public let text: String
+
+    public init(time: Double, text: String) {
+        self.time = time
+        self.text = text
+    }
 }
 
 // MARK: - 歌词来源协议
@@ -479,7 +484,7 @@ private struct QQLyricResp: Decodable {
 // MARK: - 通用匹配工具
 
 /// 从搜索结果中挑选最匹配的曲目：标题相似 + 艺人包含 + 时长接近，综合打分取最高。
-func bestMatch<T>(items: [T], title: String, artist: String, duration: Double,
+public func bestMatch<T>(items: [T], title: String, artist: String, duration: Double,
                   getName: (T) -> String,
                   getArtist: (T) -> String,
                   getDuration: (T) -> Double?) -> T? {
@@ -495,7 +500,8 @@ func bestMatch<T>(items: [T], title: String, artist: String, duration: Double,
         if let d = getDuration(item), duration > 0, abs(d - duration) < 8 { score += 1 }
         if score > (best?.score ?? -1) { best = (item, score) }
     }
-    return best?.item
+    // 最低匹配分阈值为 1：标题或艺人至少一项需匹配，否则返回 nil（避免搜索结果全不相关时仍误取首项）。
+    return (best?.score ?? 0) > 0 ? best?.item : nil
 }
 
 // MARK: - 协调器（来源回退链）
@@ -522,20 +528,44 @@ struct LyricsFetcher {
 
 // MARK: - 公开入口
 
+// MARK: - 歌词缓存（按归一化 trackKey 缓存已转换结果，避免同曲重播/切回时重复网络拉取 + 繁简转换）
+
+/// actor 隔离的内存缓存：key 为 "title|artist|album|duration(取整)"（含 duration 防同名单曲不同版本串缓存），
+/// 有界 LRU ~200 条。仅缓存非空结果；模型仍只调 fetchSynced，无感知。
+private actor LyricsCacheStore {
+    static let shared = LyricsCacheStore()
+    private var store: [String: [LyricLine]] = [:]
+    private let limit = 200
+
+    func get(_ key: String) -> [LyricLine]? { store[key] }
+
+    func set(_ key: String, _ lines: [LyricLine]) {
+        if store.count >= limit, store[key] == nil {
+            store.removeValue(forKey: store.keys.first!) // 简单越界淘汰（非严格 LRU，但量级可控）
+        }
+        store[key] = lines
+    }
+}
+
 /// 从多个音源拉取时间同步歌词，并统一做繁→简转换。
 /// 失败时返回空数组（UI 层据此隐藏歌词）。
-enum LyricsService {
+public enum LyricsService {
     /// 公开入口：优先返回时间同步歌词；若全部来源都没有，返回空数组。
+    /// 增加按 trackKey 的内存缓存：同曲重播/切回时直接命中，省网络拉取与繁简转换（含限流/电量）。
     static func fetchSynced(title: String, artist: String, album: String, duration: Double) async -> [LyricLine] {
+        let key = "\(title)|\(artist)|\(album)|\(Int(duration.rounded()))"
+        if let cached = await LyricsCacheStore.shared.get(key) { return cached }
         let raw = await LyricsFetcher.fetch(title: title, artist: artist, album: album, duration: duration)
         // 统一做繁体→简体（华语歌词常出现繁体，转换后更顺眼；对简体/英文无副作用）
-        return raw.map { LyricLine(time: $0.time, text: TraditionalSimplified.convert($0.text)) }
+        let converted = raw.map { LyricLine(time: $0.time, text: TraditionalSimplified.convert($0.text)) }
+        if !converted.isEmpty { await LyricsCacheStore.shared.set(key, converted) }
+        return converted
     }
 
     // MARK: - 解析
 
     /// 解析 LRC 文本（"[mm:ss.xx] 歌词"）为按时间排序的歌词行。
-    static func parseLRC(_ lrc: String) -> [LyricLine] {
+    public static func parseLRC(_ lrc: String) -> [LyricLine] {
         var lines: [LyricLine] = []
         let tagPattern = try? NSRegularExpression(pattern: #"\[(\d{1,2}):(\d{2})(?:[.:](\d{1,3}))?\]"#)
 
@@ -567,7 +597,7 @@ enum LyricsService {
 
     /// 把纯文本（无时间戳）歌词在整首歌时长内均匀铺开，
     /// 这样即使没有时间戳也能随播放进度滚动。
-    static func parsePlain(_ text: String, duration: Double) -> [LyricLine] {
+    public static func parsePlain(_ text: String, duration: Double) -> [LyricLine] {
         let lines = text
             .split(whereSeparator: { $0.isNewline })
             .map { $0.trimmingCharacters(in: .whitespaces) }

@@ -1,4 +1,5 @@
 import AppKit
+import CanopyKit
 
 // 顶层可执行代码，运行在主线程。
 MainActor.assumeIsolated {

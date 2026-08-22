@@ -3,7 +3,7 @@
 // 故改用内置映射表，零依赖、运行时可靠。未收录的字符保持原样。
 import Foundation
 
-enum TraditionalSimplified {
+public enum TraditionalSimplified {
     private static let table: [(Character, Character)] = [
         ("體","体"), ("貼","贴"), ("讓","让"), ("動","动"), ("當","当"), ("們","们"),
         ("過","过"), ("無","无"), ("蘇","苏"), ("綠","绿"), ("與","与"), ("嬌","娇"),
@@ -108,7 +108,7 @@ enum TraditionalSimplified {
     private static let map = Dictionary(uniqueKeysWithValues: table)
 
     /// 将字符串中的繁体字符转为简体（未收录字符保持原样）。
-    static func convert(_ text: String) -> String {
+    public static func convert(_ text: String) -> String {
         String(text.map { map[$0] ?? $0 })
     }
 }

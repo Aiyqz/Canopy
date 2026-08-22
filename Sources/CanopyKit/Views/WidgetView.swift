@@ -24,7 +24,7 @@ struct VisualEffectView: NSViewRepresentable {
 
 /// The full desktop widget: Liquid Glass + album-art gradient + content.
 struct WidgetView: View {
-    @ObservedObject var vm: NowPlayingModel
+    var vm: NowPlayingModel
     var preset: WidgetPreset
     /// When true, replaces the live blur with an opaque gradient (for offscreen snapshots).
     var snapshotMode = false

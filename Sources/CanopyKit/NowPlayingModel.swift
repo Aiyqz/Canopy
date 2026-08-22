@@ -1,36 +1,37 @@
 import AppKit
-import Combine
+import Observation
 import SwiftUI
 import UniformTypeIdentifiers
 
 /// 当前播放状态（可被 UI 观察）。数据来源：MediaRemote 通知 + 主动轮询。
 /// 同时管理歌词、从专辑封面提取的渐变色板、以及文件拖放暂存区。
 @MainActor
-final class NowPlayingModel: ObservableObject {
-    @Published var title: String = ""
-    @Published var artist: String = ""
-    @Published var album: String = ""
-    @Published var artwork: NSImage?
-    @Published var isPlaying: Bool = false
-    @Published var duration: Double = 0
-    @Published var elapsed: Double = 0
+@Observable
+final class NowPlayingModel {
+    var title: String = ""
+    var artist: String = ""
+    var album: String = ""
+    var artwork: NSImage?
+    var isPlaying: Bool = false
+    var duration: Double = 0
+    var elapsed: Double = 0
 
     /// 只要曾经出现过任意曲目就为 true（用于判断是否有可显示内容）。
-    @Published var hasContent: Bool = false
+    var hasContent: Bool = false
 
     // 从专辑封面提取的渐变色板（类似 Apple Music 的风格）。
-    @Published var palette: [Color] = ColorExtractor.fallback
+    var palette: [Color] = ColorExtractor.fallback
 
     // 时间同步歌词（按时间戳排序的行）。
-    @Published var lyrics: [LyricLine] = []
-    @Published var currentLyricIndex: Int?
+    var lyrics: [LyricLine] = []
+    var currentLyricIndex: Int?
 
     // 文件拖放暂存区（把文件拖到灵动岛可暂存）。
-    @Published var shelfFiles: [URL] = []
-    @Published var isDropTargeted: Bool = false
+    var shelfFiles: [URL] = []
+    var isDropTargeted: Bool = false
 
     // 灵动岛横幅（切歌 / 系统通知镜像时弹出）。
-    @Published var currentBanner: NotchBanner?
+    var currentBanner: NotchBanner?
 
     private var pollTimer: Timer?
     private var frameTimer: Timer?
@@ -43,6 +44,12 @@ final class NowPlayingModel: ObservableObject {
     private var trackKey: String = ""
     private var bannerQueue: [NotchBanner] = []
     private var bannerDismiss: DispatchWorkItem?
+
+    // 同步模式状态机：优先 MediaRemote 通知/轮询；其持续取不到时降级到 AppleScript 兜底，
+    // 避免在无谓场景每 3s 起一个 osascript 进程烧 CPU/电池。
+    private enum SyncMode { case mediaRemote, appleScript }
+    private var syncMode: SyncMode = .mediaRemote
+    private var mrEmptyStreak = 0
 
     var hasMedia: Bool { !title.isEmpty }
     var shelfPinned: Bool { !shelfFiles.isEmpty || isDropTargeted }
@@ -57,11 +64,19 @@ final class NowPlayingModel: ObservableObject {
     /// 当前行内的播放进度 0..1，用于歌词“逐字渐变”高亮（卡拉OK 效果）。
     /// 注意：LRCLIB 只提供行级时间戳，所以这是“整行内的进度填充”，并非逐字精确。
     var currentLyricProgress: Double {
-        guard let i = currentLyricIndex, lyrics.indices.contains(i) else { return 0 }
-        let start = lyrics[i].time
-        let end = lyrics.indices.contains(i + 1) ? lyrics[i + 1].time : (duration > start ? duration : start + 5)
-        let span = max(end - start, 0.5)
-        return min(max((elapsed - start) / span, 0), 1)
+        progress(for: currentLyricIndex, elapsed: elapsed)
+    }
+
+    /// 与死推算同公式、但**不读** `@Published elapsed` 的播放头估算（读 basePosition + 墙钟）。
+    /// 供 TimelineView 叶子在自身节奏里驱动卡拉OK渐变，从而解除对「每帧发布 elapsed」的依赖，
+    /// 配合 @Observable 细粒度追踪，把高频重绘收敛到渐变层本身。
+    func liveElapsed() -> Double {
+        duration > 0 ? min(basePosition + Date().timeIntervalSince(baseTime), duration) : elapsed
+    }
+
+    /// 给定某行索引与播放头，算该行内 0..1 进度（与 currentLyricProgress 同逻辑，但用传入 elapsed）。
+    func progress(for index: Int?, elapsed e: Double) -> Double {
+        LyricsIndex.progress(for: index, elapsed: e, lyrics: lyrics, duration: duration)
     }
 
     /// 启动：注册 MediaRemote 通知、首次刷新、并启动 3s 兜底轮询。
@@ -79,24 +94,22 @@ final class NowPlayingModel: ObservableObject {
         refresh()
         refreshPlaying()
 
-        // 高帧率显示链路按需启动：仅在“正在播放”时跑 60fps 定时器连续推算播放头，
+        // 高帧率显示链路按需启动：仅在“正在播放”时跑 15fps 定时器连续推算播放头，
         // 暂停/空闲时立即停止（stopFrameTimer），避免空转烧 CPU。
         // 首次播放由 refresh()/refreshPlaying() 触发 startFrameTimer()。
 
-        // 周期性轮询：MediaRemote 只在“切歌/播放状态变化”时发通知，
-        // 若应用启动前就在播放、且之后没有切歌，初始 getNowPlayingInfo
-        // 可能返回空，导致永远收不到歌词。这里每 3s 主动拉一次做兜底。
-        // 注意：只作为“基准校正”，不再硬覆盖播放头，因此不会造成跳变。
-        pollTimer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.refresh() }
-        }
+        // 周期性轮询（安全兜底）：MediaRemote 只在“切歌/播放状态变化”时发通知，
+        // 若应用启动前就在播放、且之后没有切歌，初始 getNowPlayingInfo 可能返回空。
+        // 用 SyncMode 状态机驱动：MR 可用时仅 15s 慢速兜底；其持续失效才降级到 AppleScript（3s），
+        // 从而避免在 MR 正常时每 3s 起 osascript 进程。注意：只作“基准校正”，不硬覆盖播放头。
+        reconfigurePoll()
     }
 
     private func startFrameTimer() {
         guard frameTimer == nil else { return }
-        // 30fps 足够驱动卡拉OK渐变（填充行跨度数秒，逐帧位移远小于 4% 过渡带，肉眼无差别），
-        // 相比 60fps 省约一半 SwiftUI 重绘开销。
-        let timer = Timer.scheduledTimer(withTimeInterval: 1/30, repeats: true) { [weak self] _ in
+        // 15fps 足够驱动卡拉OK渐变（填充行跨度数秒，逐帧位移≈2% < 4% 过渡带，肉眼无差别），
+        // 相比 30fps 再省约一半 SwiftUI 重绘开销；结合 @Observable 按属性追踪，重绘爆炸半径已收缩到进度条/渐变层。
+        let timer = Timer.scheduledTimer(withTimeInterval: 1/15, repeats: true) { [weak self] _ in
             // 定时器本就在主线程/主 RunLoop 触发，用 assumeIsolated 同步调用，零异步跳转开销。
             MainActor.assumeIsolated { self?.frameTick() }
         }
@@ -107,6 +120,19 @@ final class NowPlayingModel: ObservableObject {
     private func stopFrameTimer() {
         frameTimer?.invalidate()
         frameTimer = nil
+    }
+
+    /// 按当前同步模式重建轮询定时器：MR 可用时仅 15s 慢速安全兜底（几乎不耗电）；
+    /// 降级到 AppleScript 兜底时 3s 保响应。重复调用会先失效旧定时器，天然防重复 start 泄漏。
+    private func reconfigurePoll() {
+        pollTimer?.invalidate()
+        pollTimer = nil
+        let interval: TimeInterval = syncMode == .appleScript ? 3 : 15
+        let timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.refresh() }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        pollTimer = timer
     }
 
     /// 每帧调用：在 isPlaying 时基于墙钟时间连续推算播放头位置。
@@ -129,21 +155,36 @@ final class NowPlayingModel: ObservableObject {
         updateLyricIndex()
     }
 
-    /// 拉取当前播放信息：优先 MediaRemote，取不到则走 AppleScript 兜底。
+    /// 拉取当前播放信息：优先 MediaRemote；其持续取不到时经 SyncMode 状态机降级到 AppleScript 兜底。
     func refresh() {
         MediaRemote.shared.getNowPlayingInfo { [weak self] info in
             let hasMedia = (info[MediaRemote.kTitle] as? String)?.isEmpty == false
             if hasMedia {
-                Task { @MainActor in self?.apply(info) }
+                Task { @MainActor in
+                    guard let self else { return }
+                    // MR 恢复可用：切回 mediaRemote 模式并放慢轮询（省电），清零失效计数。
+                    if self.syncMode != .mediaRemote {
+                        self.syncMode = .mediaRemote
+                        self.reconfigurePoll()
+                    }
+                    self.mrEmptyStreak = 0
+                    self.apply(info)
+                }
                 return
             }
-            // MediaRemote 取不到（macOS 26 私有 API 在开发者预览下失效）→
-            // 用 AppleScript 直接问 Spotify / Music 当前播放，作为兜底。
-            Task.detached {
-                if let scriptInfo = fetchNowPlayingViaScript() {
-                    Task { @MainActor in self?.apply(scriptInfo) }
+            // MediaRemote 取不到：先给 MR 两次机会（避免切歌间隙误判），确认持续失效再降级 AppleScript 兜底。
+            Task { @MainActor in
+                guard let self else { return }
+                if self.syncMode == .appleScript {
+                    // 已在兜底模式：仅此路径才起 osascript 进程。
+                    if let scriptInfo = fetchNowPlayingViaScript() { self.apply(scriptInfo) }
+                    return
                 }
-                // 两边都取不到：保留上一次状态，避免轮询偶发失败把歌词清空 / elapsed 归零
+                self.mrEmptyStreak += 1
+                if self.mrEmptyStreak >= 2 {
+                    self.syncMode = .appleScript
+                    self.reconfigurePoll()
+                }
             }
         }
     }
@@ -158,6 +199,7 @@ final class NowPlayingModel: ObservableObject {
                     self?.isPlaying = true
                 } else {
                     self?.isPlaying = false
+                    self?.stopFrameTimer() // 暂停/停止：显式停表，避免依赖下一帧隐式自停的时序缝隙
                 }
                 if self?.isPlaying == true { self?.startFrameTimer() }
             }
@@ -171,11 +213,18 @@ final class NowPlayingModel: ObservableObject {
         album = info[MediaRemote.kAlbum] as? String ?? ""
         duration = info[MediaRemote.kDuration] as? Double ?? 0
         let pos = info[MediaRemote.kElapsed] as? Double ?? 0
-        // 死推算基准校正：用真实回传位置重置基准，播放头由 frameTick 连续推算，
-        // 不再直接写 elapsed，从而避免 3s 一次的跳变。
-        basePosition = pos
-        baseTime = Date()
-        elapsed = pos
+        // 死推算基准校正：用真实回传位置重置基准，播放头由 frameTick 连续推算。
+        // 仅在「切歌」或「推算漂移超过 0.5s」时才硬重置 elapsed，避免每 3s 轮询把进度条/卡拉OK向后微跳。
+        let incomingKey = "\(title)|\(artist)|\(album)"
+        if incomingKey != trackKey || abs(elapsed - pos) > 0.5 {
+            basePosition = pos
+            baseTime = Date()
+            elapsed = pos
+        } else {
+            // 小漂移：仅轻量校正基准，不回写 elapsed，保持推算平滑
+            basePosition = pos
+            baseTime = Date()
+        }
 
         if let rate = info[MediaRemote.kPlaybackRate] as? Double {
             isPlaying = rate > 0
@@ -272,21 +321,11 @@ final class NowPlayingModel: ObservableObject {
     }
 
     private func updateLyricIndex() {
-        guard !lyrics.isEmpty else {
-            if currentLyricIndex != nil { currentLyricIndex = nil }
-            return
-        }
-        // 快速判定：当前行尚未结束则直接跳过，避免每帧都遍历全部歌词（30/60fps 下省掉 99% 的扫描）
-        if let i = currentLyricIndex, lyrics.indices.contains(i) {
-            let nextTime = lyrics.indices.contains(i + 1) ? lyrics[i + 1].time : .infinity
-            if elapsed + 0.25 < nextTime { return }
-        }
-        var idx: Int?
-        for (i, line) in lyrics.enumerated() {
-            if line.time <= elapsed + 0.25 { idx = i } else { break }
-        }
-        if idx != currentLyricIndex {
-            withAnimation(.easeInOut(duration: 0.3)) { currentLyricIndex = idx }
+        // 索引核心逻辑已抽到 UI 无关的纯函数 LyricsIndex.compute（含循环重播 / 进度条回拖的
+        // 下界修复），此处仅把模型状态喂进去、且仅在结果变化时带动画写回，避免每帧无谓重绘。
+        let next = LyricsIndex.compute(lyrics: lyrics, elapsed: elapsed, currentIndex: currentLyricIndex)
+        if next != currentLyricIndex {
+            withAnimation(.easeInOut(duration: 0.3)) { currentLyricIndex = next }
         }
     }
 

@@ -38,8 +38,8 @@ struct AppIconView: View {
 }
 
 @MainActor
-enum IconRenderer {
-    static func render(to path: String) {
+public enum IconRenderer {
+    public static func render(to path: String) {
         NotchSnapshotter.write(AppIconView(), to: path)
     }
 }

@@ -2,7 +2,9 @@
 import AppKit
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
+public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
+    public override init() { super.init() }
+
     private let model = NowPlayingModel()
     private let settings = SettingsStore()
     private let mirror = NotificationMirror()
@@ -10,7 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var widgetController: WidgetController?
     private var statusItem: NSStatusItem?
 
-    func applicationDidFinishLaunching(_ notification: Notification) {
+    public func applicationDidFinishLaunching(_ notification: Notification) {
         model.start()
         notchController = NotchController(model: model)
         widgetController = WidgetController(model: model, settings: settings)
@@ -110,7 +112,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     // Refresh checkmarks each time the menu opens.
-    func menuNeedsUpdate(_ menu: NSMenu) {
+    public func menuNeedsUpdate(_ menu: NSMenu) {
         rebuildMenu()
     }
 

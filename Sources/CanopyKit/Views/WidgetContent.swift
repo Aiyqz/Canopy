@@ -4,7 +4,7 @@ import SwiftUI
 /// The desktop "lockscreen" widget content. Rendered over a Liquid Glass
 /// background (see WidgetView) with a gradient tinted from album art.
 struct WidgetContent: View {
-    @ObservedObject var vm: NowPlayingModel
+    var vm: NowPlayingModel
     var preset: WidgetPreset
 
     var body: some View {
@@ -142,7 +142,7 @@ struct ClockView: View {
 // MARK: - Now Playing card (used in lockscreen)
 
 struct NowPlayingCard: View {
-    @ObservedObject var vm: NowPlayingModel
+    var vm: NowPlayingModel
 
     var body: some View {
         VStack(spacing: 12) {
@@ -190,7 +190,7 @@ struct NowPlayingCard: View {
 // MARK: - Transport controls
 
 struct TransportControls: View {
-    @ObservedObject var vm: NowPlayingModel
+    var vm: NowPlayingModel
     var compact = false
 
     private var big: CGFloat { compact ? 22 : 30 }
@@ -220,7 +220,7 @@ struct TransportControls: View {
 // MARK: - Lyrics column
 
 struct LyricsColumn: View {
-    @ObservedObject var vm: NowPlayingModel
+    var vm: NowPlayingModel
 
     var body: some View {
         GeometryReader { _ in

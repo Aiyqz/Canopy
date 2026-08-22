@@ -18,10 +18,30 @@ private func karaokeForeground(_ progress: Double) -> LinearGradient {
     )
 }
 
+/// 卡拉OK渐变歌词文本：用 TimelineView 以自身 15fps 节奏读取 liveElapsed 计算进度，
+/// 不再依赖模型每帧发布的 elapsed，从而把高频重绘收敛到这一个叶子视图（配合 @Observable 细粒度追踪）。
+private struct KaraokeLyricText: View {
+    let lyric: String
+    var vm: NowPlayingModel
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1/15)) { _ in
+            let p = vm.progress(for: vm.currentLyricIndex, elapsed: vm.liveElapsed())
+            Text(lyric)
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(karaokeForeground(p))
+                .shadow(color: .black.opacity(0.6), radius: 2, y: 1)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .frame(maxWidth: .infinity, alignment: .center)
+        }
+    }
+}
+
 /// The root view that fills the floating notch window. Hover (or an active file
 /// drop) swaps between the collapsed pill and the expanded media panel.
 struct NotchView: View {
-    @ObservedObject var vm: NowPlayingModel
+    var vm: NowPlayingModel
     let metrics: NotchMetrics
     let onPresent: (NotchPresentation) -> Void
 
@@ -116,7 +136,7 @@ struct NotchView: View {
 // MARK: - Collapsed
 
 struct CollapsedPill: View {
-    @ObservedObject var vm: NowPlayingModel
+    var vm: NowPlayingModel
     let metrics: NotchMetrics
 
     private var accent: Color { vm.palette.first ?? .white }
@@ -131,13 +151,7 @@ struct CollapsedPill: View {
             // 当前同步歌词直接显示在收起状态的小岛上（Dynamic Lyrics 风格）。
             // 居中、加大字号、白色高对比 + 阴影，确保看得清。
             if let lyric = vm.currentLyric {
-                Text(lyric)
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(karaokeForeground(vm.currentLyricProgress)) // 应用卡拉OK渐变高亮（已唱白色、未唱暗灰）
-                    .shadow(color: .black.opacity(0.6), radius: 2, y: 1)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .frame(maxWidth: .infinity, alignment: .center)
+                KaraokeLyricText(lyric: lyric, vm: vm)
                     .id(lyric)
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
             } else {
@@ -207,7 +221,7 @@ struct BannerView: View {
 // MARK: - Expanded
 
 struct ExpandedPanel: View {
-    @ObservedObject var vm: NowPlayingModel
+    var vm: NowPlayingModel
 
     private var accent: Color { vm.palette.first ?? .white }
 
@@ -230,13 +244,7 @@ struct ExpandedPanel: View {
             }
 
             if let lyric = vm.currentLyric {
-                Text(lyric)
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(karaokeForeground(vm.currentLyricProgress)) // 应用卡拉OK渐变高亮（已唱白色、未唱暗灰）
-                    .shadow(color: .black.opacity(0.6), radius: 2, y: 1)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .frame(maxWidth: .infinity, alignment: .center)
+                KaraokeLyricText(lyric: lyric, vm: vm)
                     .id(lyric)
                     .transition(.asymmetric(
                         insertion: .opacity.combined(with: .move(edge: .bottom)),
@@ -269,7 +277,7 @@ struct ExpandedPanel: View {
 // MARK: - Scrub bar
 
 struct ScrubBar: View {
-    @ObservedObject var vm: NowPlayingModel
+    var vm: NowPlayingModel
     var accent: Color
 
     @State private var dragging = false
@@ -327,7 +335,7 @@ struct ScrubBar: View {
 // MARK: - File shelf
 
 struct ShelfStrip: View {
-    @ObservedObject var vm: NowPlayingModel
+    var vm: NowPlayingModel
 
     var body: some View {
         HStack(spacing: 8) {
@@ -416,7 +424,7 @@ private func timeString(_ t: Double) -> String {
 // MARK: - Snapshot (offscreen render for verification, no screen-recording needed)
 
 @MainActor
-enum NotchSnapshotter {
+public enum NotchSnapshotter {
     /// 构造一份用于快照渲染的示例模型（固定进度，便于核对卡拉OK渐变与布局）。
     static func sampleModel(withShelf: Bool = false) -> NowPlayingModel {
         let model = NowPlayingModel()
@@ -451,7 +459,7 @@ enum NotchSnapshotter {
     }
 
     /// 把示例模型离屏渲染成多张 PNG 到指定目录（用于界面验证，不显示窗口）。
-    static func run(to directory: String) {
+    public static func run(to directory: String) {
         let model = sampleModel()
         let metrics = NotchMetrics(notchWidth: 200, notchHeight: 34)
 
