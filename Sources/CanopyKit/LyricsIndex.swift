@@ -46,6 +46,9 @@ public enum LyricsIndex {
     /// 给定某行索引与播放头，算该行内 0..1 进度（卡拉OK 逐字填充用）。
     /// 与 `NowPlayingModel.currentLyricProgress` 同逻辑，但用传入的 `elapsed` 与歌词/时长，
     /// 便于脱离模型实例做单测。
+    ///
+    /// 当歌词行携带逐字时间（`words` 非空）时，按每字实际起始/持续时间计算进度，
+    /// 卡拉OK 填充与真实演唱节奏一致；否则回退线性插值。
     public static func progress(
         for index: Int?,
         elapsed: Double,
@@ -53,7 +56,27 @@ public enum LyricsIndex {
         duration: Double
     ) -> Double {
         guard let i = index, lyrics.indices.contains(i) else { return 0 }
-        let start = lyrics[i].time
+        let line = lyrics[i]
+
+        // 逐字时间可用：按每字实际时间计算已唱比例
+        if let words = line.words, !words.isEmpty {
+            var sungCount = 0.0
+            for word in words {
+                if elapsed >= word.time + word.duration {
+                    sungCount += 1.0
+                } else if elapsed >= word.time {
+                    // 当前字：按持续时间比例部分计入
+                    sungCount += (elapsed - word.time) / max(word.duration, 0.001)
+                    break
+                } else {
+                    break
+                }
+            }
+            return min(max(sungCount / Double(words.count), 0), 1)
+        }
+
+        // 无逐字时间：回退线性插值
+        let start = line.time
         let end = lyrics.indices.contains(i + 1) ? lyrics[i + 1].time : (duration > start ? duration : start + 5)
         let span = max(end - start, 0.5)
         return min(max((elapsed - start) / span, 0), 1)

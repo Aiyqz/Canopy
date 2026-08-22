@@ -4,15 +4,30 @@ import CryptoKit
 
 // MARK: - 歌词行模型
 
+/// 逐字时间信息（仅 YRC 逐字歌词源有，标准 LRC 为 nil）。
+public struct LyricWord: Equatable {
+    public let time: Double       // 该字起始时间（秒）
+    public let duration: Double   // 该字持续时间（秒）
+    public let char: Character
+
+    public init(time: Double, duration: Double, char: Character) {
+        self.time = time
+        self.duration = duration
+        self.char = char
+    }
+}
+
 /// 一行时间同步歌词。
 public struct LyricLine: Identifiable, Equatable {
     public let id = UUID()
     public let time: Double      // 起始时间（秒）
     public let text: String
+    public let words: [LyricWord]?  // 逐字时间（可选，仅 YRC 源有）
 
-    public init(time: Double, text: String) {
+    public init(time: Double, text: String, words: [LyricWord]? = nil) {
         self.time = time
         self.text = text
+        self.words = words
     }
 }
 
@@ -185,9 +200,8 @@ struct NeteaseSource: LyricsSource {
         // 1) 搜索拿到 song id
         guard let songId = await searchId(keyword: "\(title) \(artist)".trimmingCharacters(in: .whitespaces),
                                           title: title, artist: artist, duration: duration) else { return nil }
-        // 2) 用 id 拉歌词
-        guard let lrc = await fetchLyric(songId: songId) else { return nil }
-        let lines = LyricsService.parseLRC(lrc)
+        // 2) 用 id 拉歌词（优先逐字 YRC，其次标准 LRC）
+        guard let lines = await fetchLyric(songId: songId) else { return nil }
         return lines.isEmpty ? nil : lines
     }
 
@@ -217,7 +231,7 @@ struct NeteaseSource: LyricsSource {
 
     // MARK: 拉歌词
 
-    private func fetchLyric(songId: String) async -> String? {
+    private func fetchLyric(songId: String) async -> [LyricLine]? {
         let url = "https://interface3.music.163.com/eapi/song/lyric/v1"
         let data: [String: String] = [
             "id": songId,
@@ -233,7 +247,15 @@ struct NeteaseSource: LyricsSource {
         ]
         guard let body = try? await eapiRequest(url: url, params: data),
               let resp = try? JSONDecoder().decode(NeteaseLyricResp.self, from: body) else { return nil }
-        return resp.lrc?.lyric?.isEmpty == false ? resp.lrc?.lyric : nil
+        // 优先返回逐字歌词（YRC），其次标准 LRC
+        if let yrc = resp.yrc?.lyric, !yrc.isEmpty {
+            let lines = LyricsService.parseYRC(yrc)
+            if !lines.isEmpty { return lines }
+        }
+        if let lrc = resp.lrc?.lyric, !lrc.isEmpty {
+            return LyricsService.parseLRC(lrc)
+        }
+        return nil
     }
 
     // MARK: eapi 请求封装
@@ -344,6 +366,7 @@ private struct NeteaseSearchResp: Decodable {
 private struct NeteaseLyricResp: Decodable {
     struct Lyrics: Decodable { let lyric: String? }
     let lrc: Lyrics?
+    let yrc: Lyrics?   // 逐字歌词（YRC 格式）
     let code: Int?
 }
 
@@ -507,12 +530,12 @@ public func bestMatch<T>(items: [T], title: String, artist: String, duration: Do
 // MARK: - 协调器（来源回退链）
 
 /// 多音源协调器：按优先级依次尝试，返回第一个非空结果。
-/// 顺序：LRCLIB（海外）→ 网易云（国内）→ QQ音乐（国内）。
+/// 顺序：网易云（国内，直连，有逐字歌词）→ QQ音乐（国内，直连）→ LRCLIB（海外，走代理，兜底）。
 struct LyricsFetcher {
     static let sources: [any LyricsSource] = [
-        LRCLIBSource(),
         NeteaseSource(),
-        QQMusicSource()
+        QQMusicSource(),
+        LRCLIBSource()
     ]
 
     static func fetch(title: String, artist: String, album: String, duration: Double) async -> [LyricLine] {
@@ -557,7 +580,15 @@ public enum LyricsService {
         if let cached = await LyricsCacheStore.shared.get(key) { return cached }
         let raw = await LyricsFetcher.fetch(title: title, artist: artist, album: album, duration: duration)
         // 统一做繁体→简体（华语歌词常出现繁体，转换后更顺眼；对简体/英文无副作用）
-        let converted = raw.map { LyricLine(time: $0.time, text: TraditionalSimplified.convert($0.text)) }
+        // 逐字歌词的 words 也要同步转换字符，否则卡拉OK 逐字填充会显示繁体
+        let converted = raw.map { line in
+            let convertedText = TraditionalSimplified.convert(line.text)
+            let convertedWords = line.words?.map { word in
+                LyricWord(time: word.time, duration: word.duration,
+                          char: TraditionalSimplified.convert(String(word.char)).first ?? word.char)
+            }
+            return LyricLine(time: line.time, text: convertedText, words: convertedWords)
+        }
         if !converted.isEmpty { await LyricsCacheStore.shared.set(key, converted) }
         return converted
     }
@@ -607,5 +638,61 @@ public enum LyricsService {
         return lines.enumerated().map { offset, element in
             LyricLine(time: per * Double(offset), text: element)
         }
+    }
+
+    /// 解析网易云 YRC 逐字歌词格式。
+    ///
+    /// YRC 格式示例：
+    /// ```
+    /// [830,9230](830,370,0)也(1200,410,0)许(1610,460,0)是
+    /// ```
+    /// - `[start_ms, duration_ms]`：行起始时间与总时长（毫秒）
+    /// - `(start_ms, duration_ms, 0)char`：每个字的绝对起始时间与持续时间（毫秒）
+    ///
+    /// 解析后每行携带 `words` 数组，供卡拉OK 逐字填充使用。
+    public static func parseYRC(_ yrc: String) -> [LyricLine] {
+        var lines: [LyricLine] = []
+        let headerPattern = try? NSRegularExpression(pattern: #"\[(\d+),(\d+)\]"#)
+        let wordPattern = try? NSRegularExpression(pattern: #"\((\d+),(\d+),\d+\)([^\(\)\[\]]*)"#)
+
+        for raw in yrc.split(whereSeparator: { $0 == "\n" || $0 == "\r" }) {
+            let line = String(raw)
+            let ns = line as NSString
+
+            // 提取行头 [start_ms, duration_ms]
+            guard let headerRegex = headerPattern,
+                  let headerMatch = headerRegex.firstMatch(in: line, range: NSRange(location: 0, length: ns.length)) else {
+                continue
+            }
+            let lineStartMs = Double(ns.substring(with: headerMatch.range(at: 1))) ?? 0
+
+            // 提取逐字 (start_ms, duration_ms, 0)char
+            var words: [LyricWord] = []
+            var textChars = ""
+            if let wordRegex = wordPattern {
+                let wordMatches = wordRegex.matches(in: line, range: NSRange(location: 0, length: ns.length))
+                for m in wordMatches {
+                    let charStartMs = Double(ns.substring(with: m.range(at: 1))) ?? 0
+                    let charDurationMs = Double(ns.substring(with: m.range(at: 2))) ?? 0
+                    let charText = ns.substring(with: m.range(at: 3))
+                    if !charText.isEmpty {
+                        for ch in charText {
+                            words.append(LyricWord(time: charStartMs / 1000, duration: charDurationMs / 1000, char: ch))
+                        }
+                        textChars += charText
+                    }
+                }
+            }
+
+            let text = textChars.trimmingCharacters(in: .whitespaces)
+            guard !text.isEmpty else { continue }
+
+            lines.append(LyricLine(
+                time: lineStartMs / 1000,
+                text: text,
+                words: words.isEmpty ? nil : words
+            ))
+        }
+        return lines.sorted { $0.time < $1.time }
     }
 }
