@@ -96,12 +96,18 @@ final class NowPlayingModel {
         refreshPlaying()
 
         // MediaRemote 在 macOS 26 对 Spotify 拿不到 nowPlayingInfo（title 恒空），
-        // 只能靠 AppleScript 兜底。若启动时同步探测即命中，立即应用并切到 appleScript 模式，
-        // 避免「连续 2 次空轮询（各 15s）」才降级、用户启动后干等 30s 没歌词。
-        if let scriptInfo = fetchNowPlayingViaScript() {
-            canopyLog("[Canopy] start: 启动即 AppleScript 命中，立即应用")
-            syncMode = .appleScript
-            apply(scriptInfo)
+        // 只能靠 AppleScript 兜底。启动时异步探测一次：命中立即应用并切 appleScript 模式，
+        // 避免「连续空轮询」才降级、用户启动后干等才出歌词。
+        // 注意必须异步：osascript 可能卡住，同步调用会阻塞主线程导致 MediaRemote 回调停摆。
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            if let scriptInfo = fetchNowPlayingViaScript() {
+                canopyLog("[Canopy] start: 启动即 AppleScript 命中，立即应用")
+                self.syncMode = .appleScript
+                self.apply(scriptInfo)
+            } else {
+                canopyLog("[Canopy] start: AppleScript 启动探测无结果")
+            }
         }
 
         reconfigurePoll()
@@ -445,11 +451,24 @@ func fetchNowPlayingViaScript() -> [String: Any]? {
     proc.standardOutput = out
     proc.standardError = err
     do { try proc.run() } catch { return cachedIfFresh() }
-    proc.waitUntilExit()
+    // 加超时：osascript 可能因等待目标应用响应而卡住（如 Spotify 后台不响应），
+    // 2 秒内未退出则终止，避免阻塞调用方（尤其主线程）。
+    let deadline = Date().addingTimeInterval(2)
+    while proc.isRunning && Date() < deadline {
+        RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.05))
+    }
+    if proc.isRunning {
+        proc.terminate()
+        canopyLog("[Canopy] AppleScript 超时(2s)，已终止 osascript")
+        return cachedIfFresh()
+    }
     let data = out.fileHandleForReading.readDataToEndOfFile()
     guard let raw = String(data: data, encoding: .utf8)?
         .trimmingCharacters(in: .whitespacesAndNewlines),
-          !raw.isEmpty, raw != "NONE" else { return cachedIfFresh() }
+          !raw.isEmpty, raw != "NONE" else {
+        canopyLog("[Canopy] AppleScript 原始返回: \(String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "空")")
+        return cachedIfFresh()
+    }
     let parts = raw.components(separatedBy: "|")
     guard parts.count >= 6, parts[0] == "SPOTIFY" || parts[0] == "MUSIC" else { return cachedIfFresh() }
     let title = parts[1], artist = parts[2], album = parts[3]
