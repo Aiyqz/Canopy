@@ -84,21 +84,21 @@ enum NetError: Error {
 struct LRCLIBSource: LyricsSource {
     let name = "LRCLIB"
 
-    // 写死路由器代理（ImmortalWrt，xray 监听所有接口）：
-    //   HTTP: 192.168.10.1:20171 / SOCKS5: 192.168.10.1:20170
+    // 写死路由器代理（192.168.10.1 上的代理软件，混合端口 1070 同时支持 HTTP / SOCKS5）。
+    // ⚠️ 换代理软件导致端口变化时，改下面这两个端口即可（无需改动其他代码）：
     private let proxyHost = "192.168.10.1"
-    private let proxyPortHTTP = 20171
-    private let proxyPortSOCKS = 20170
+    private let proxyPortHTTP = 1070
+    private let proxyPortSOCKS = 1070
 
     private let session: URLSession = {
         let config = URLSessionConfiguration.default
         config.connectionProxyDictionary = [
             "HTTPEnable": 1,
             "HTTPProxy": "192.168.10.1",
-            "HTTPPort": 20171,
+            "HTTPPort": 1070,
             "SOCKSEnable": 1,
             "SOCKSProxy": "192.168.10.1",
-            "SOCKSPort": 20170,
+            "SOCKSPort": 1070,
         ] as [String: Any]
         config.timeoutIntervalForRequest = 20
         config.timeoutIntervalForResource = 30
