@@ -2,6 +2,19 @@ import Foundation
 import CommonCrypto
 import CryptoKit
 
+/// 调试日志：写到固定文件 /tmp/canopy_debug.log（用 `open` 启动时 stderr 会丢失，故落盘）。
+func canopyLog(_ msg: String) {
+    let url = URL(fileURLWithPath: "/tmp/canopy_debug.log")
+    let line = "[\(Date())] \(msg)\n"
+    if let fh = try? FileHandle(forWritingTo: url) {
+        fh.seekToEndOfFile()
+        fh.write(Data(line.utf8))
+        try? fh.close()
+    } else {
+        try? line.write(to: url, atomically: true, encoding: .utf8)
+    }
+}
+
 // MARK: - 歌词行模型
 
 /// 逐字时间信息（仅 YRC 逐字歌词源有，标准 LRC 为 nil）。
@@ -540,11 +553,17 @@ struct LyricsFetcher {
 
     static func fetch(title: String, artist: String, album: String, duration: Double) async -> [LyricLine] {
         for source in sources {
-            if let lines = await source.fetch(title: title, artist: artist, album: album, duration: duration),
-               !lines.isEmpty {
+            let t0 = Date()
+            let lines = await source.fetch(title: title, artist: artist, album: album, duration: duration)
+            let dt = String(format: "%.2f", Date().timeIntervalSince(t0))
+            if let lines, !lines.isEmpty {
+                canopyLog("[Canopy] 源 \(source.name) 命中 \(lines.count) 行 (耗时\(dt)s)")
                 return lines
+            } else {
+                canopyLog("[Canopy] 源 \(source.name) 无结果 (耗时\(dt)s)")
             }
         }
+        canopyLog("[Canopy] 全部源无结果: \(title) - \(artist)")
         return []
     }
 }

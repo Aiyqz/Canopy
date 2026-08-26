@@ -81,6 +81,7 @@ final class NowPlayingModel {
 
     /// 启动：注册 MediaRemote 通知、首次刷新、并启动 3s 兜底轮询。
     func start() {
+        canopyLog("[Canopy] start() 被调用")
         MediaRemote.shared.registerForNotifications()
 
         let nc = NotificationCenter.default
@@ -94,14 +95,15 @@ final class NowPlayingModel {
         refresh()
         refreshPlaying()
 
-        // 高帧率显示链路按需启动：仅在“正在播放”时跑 15fps 定时器连续推算播放头，
-        // 暂停/空闲时立即停止（stopFrameTimer），避免空转烧 CPU。
-        // 首次播放由 refresh()/refreshPlaying() 触发 startFrameTimer()。
+        // MediaRemote 在 macOS 26 对 Spotify 拿不到 nowPlayingInfo（title 恒空），
+        // 只能靠 AppleScript 兜底。若启动时同步探测即命中，立即应用并切到 appleScript 模式，
+        // 避免「连续 2 次空轮询（各 15s）」才降级、用户启动后干等 30s 没歌词。
+        if let scriptInfo = fetchNowPlayingViaScript() {
+            canopyLog("[Canopy] start: 启动即 AppleScript 命中，立即应用")
+            syncMode = .appleScript
+            apply(scriptInfo)
+        }
 
-        // 周期性轮询（安全兜底）：MediaRemote 只在“切歌/播放状态变化”时发通知，
-        // 若应用启动前就在播放、且之后没有切歌，初始 getNowPlayingInfo 可能返回空。
-        // 用 SyncMode 状态机驱动：MR 可用时仅 15s 慢速兜底；其持续失效才降级到 AppleScript（3s），
-        // 从而避免在 MR 正常时每 3s 起 osascript 进程。注意：只作“基准校正”，不硬覆盖播放头。
         reconfigurePoll()
     }
 
@@ -160,6 +162,7 @@ final class NowPlayingModel {
         MediaRemote.shared.getNowPlayingInfo { [weak self] info in
             let hasMedia = (info[MediaRemote.kTitle] as? String)?.isEmpty == false
             if hasMedia {
+                canopyLog("[Canopy] refresh: MediaRemote 取到播放信息")
                 Task { @MainActor in
                     guard let self else { return }
                     // MR 恢复可用：切回 mediaRemote 模式并放慢轮询（省电），清零失效计数。
@@ -177,11 +180,16 @@ final class NowPlayingModel {
                 guard let self else { return }
                 if self.syncMode == .appleScript {
                     // 已在兜底模式：仅此路径才起 osascript 进程。
-                    if let scriptInfo = fetchNowPlayingViaScript() { self.apply(scriptInfo) }
+                    if let scriptInfo = fetchNowPlayingViaScript() {
+                        canopyLog("[Canopy] refresh: AppleScript 兜底取到 \(scriptInfo[MediaRemote.kTitle] ?? "")")
+                        self.apply(scriptInfo)
+                    } else {
+                        canopyLog("[Canopy] refresh: MediaRemote 空 + AppleScript 也空")
+                    }
                     return
                 }
                 self.mrEmptyStreak += 1
-                if self.mrEmptyStreak >= 2 {
+                if self.mrEmptyStreak >= 1 {
                     self.syncMode = .appleScript
                     self.reconfigurePoll()
                 }
@@ -212,6 +220,7 @@ final class NowPlayingModel {
         artist = info[MediaRemote.kArtist] as? String ?? ""
         album = info[MediaRemote.kAlbum] as? String ?? ""
         duration = info[MediaRemote.kDuration] as? Double ?? 0
+        canopyLog("[Canopy] apply 检测到: title=\(title) artist=\(artist) duration=\(duration)")
         let pos = info[MediaRemote.kElapsed] as? Double ?? 0
         // 死推算基准校正：用真实回传位置重置基准，播放头由 frameTick 连续推算。
         // 仅在「切歌」或「推算漂移超过 0.5s」时才硬重置 elapsed，避免每 3s 轮询把进度条/卡拉OK向后微跳。
@@ -308,6 +317,7 @@ final class NowPlayingModel {
     private func loadLyrics(title: String, artist: String, album: String, duration: Double, key: String) {
         lyrics = []
         currentLyricIndex = nil
+        canopyLog("[Canopy] loadLyrics 开始: \(title) - \(artist)")
         Task { [weak self] in
             let lines = await LyricsService.fetchSynced(
                 title: title, artist: artist, album: album, duration: duration
@@ -316,6 +326,7 @@ final class NowPlayingModel {
                 guard let self, self.trackKey == key else { return }
                 self.lyrics = lines
                 self.updateLyricIndex()
+                canopyLog("[Canopy] loadLyrics 完成: 拉到 \(lines.count) 行")
             }
         }
     }
@@ -325,6 +336,7 @@ final class NowPlayingModel {
         // 下界修复），此处仅把模型状态喂进去、且仅在结果变化时带动画写回，避免每帧无谓重绘。
         let next = LyricsIndex.compute(lyrics: lyrics, elapsed: elapsed, currentIndex: currentLyricIndex)
         if next != currentLyricIndex {
+            canopyLog("[Canopy] updateLyricIndex: \(currentLyricIndex ?? -1) → \(next ?? -1) (elapsed=\(String(format: "%.2f", elapsed)) 歌词数=\(lyrics.count) 首行时间=\(String(format: "%.2f", lyrics.first?.time ?? 0)))")
             withAnimation(.easeInOut(duration: 0.3)) { currentLyricIndex = next }
         }
     }
