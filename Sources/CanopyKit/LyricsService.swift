@@ -552,9 +552,13 @@ struct LyricsFetcher {
     ]
 
     static func fetch(title: String, artist: String, album: String, duration: Double) async -> [LyricLine] {
+        // Spotify 常返回繁体歌名/艺人（如「蘭亭序」「周杰倫」），而国内源用简体存储，
+        // 拿繁体词去搜简体库会搜不到。搜索前统一转简体，命中率大幅提升。
+        let t = TraditionalSimplified.convert(title)
+        let a = TraditionalSimplified.convert(artist)
         for source in sources {
             let t0 = Date()
-            let lines = await source.fetch(title: title, artist: artist, album: album, duration: duration)
+            let lines = await source.fetch(title: t, artist: a, album: album, duration: duration)
             let dt = String(format: "%.2f", Date().timeIntervalSince(t0))
             if let lines, !lines.isEmpty {
                 canopyLog("[Canopy] 源 \(source.name) 命中 \(lines.count) 行 (耗时\(dt)s)")
@@ -563,7 +567,7 @@ struct LyricsFetcher {
                 canopyLog("[Canopy] 源 \(source.name) 无结果 (耗时\(dt)s)")
             }
         }
-        canopyLog("[Canopy] 全部源无结果: \(title) - \(artist)")
+        canopyLog("[Canopy] 全部源无结果: \(t) - \(a)")
         return []
     }
 }
